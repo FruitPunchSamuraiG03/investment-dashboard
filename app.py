@@ -590,9 +590,13 @@ with st.sidebar:
 
     if not kite_api_key:
         st.caption("⚠️ Add KITE_API_KEY to Streamlit Secrets to enable portfolio.")
+        st.caption("Go to Streamlit Cloud → your app → ⋮ → Settings → Secrets")
     elif not KITE_AVAILABLE:
-        st.caption("⚠️ kiteconnect package not installed.")
+        st.caption("⚠️ kiteconnect package not installed. Check requirements.txt.")
     else:
+        # Debug: show masked key so you can confirm it's loading correctly
+        _masked = kite_api_key[:4] + "****" + kite_api_key[-3:] if len(kite_api_key) > 7 else "****"
+        st.caption(f"Key loaded: `{_masked}`")
         # Step 1: generate login URL
         _kite_tmp = KiteConnect(api_key=kite_api_key)
         _login_url = _kite_tmp.login_url()
