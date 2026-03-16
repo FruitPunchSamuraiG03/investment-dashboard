@@ -17,6 +17,7 @@ from plotly.subplots import make_subplots
 import feedparser
 from datetime import datetime
 import warnings
+import requests
 warnings.filterwarnings("ignore")
 
 # ── Optional auto-refresh ──────────────────────────────────────────────────────
@@ -577,7 +578,7 @@ with st.sidebar:
 # MAIN CONTENT AREA
 # =============================================================================
 st.markdown('<div class="dash-title">TERMINAL</div>', unsafe_allow_html=True)
-st.markdown('<div class="dash-subtitle">Real-time · Professional Grade · India & Global Markets</div>', unsafe_allow_html=True)
+st.markdown('<div class="dash-subtitle">Markets. Data. Edge.</div>', unsafe_allow_html=True)
 st.markdown("---")
 
 # =============================================================================
@@ -1029,25 +1030,21 @@ with tab_tv:
 
 
 # =============================================================================
-# TAB 7 — Telegram Channels (via RSSHub → feedparser → news cards)
-# RSSHub converts any public Telegram channel into a standard RSS feed.
-# URL pattern: https://rsshub.app/telegram/channel/CHANNEL_USERNAME
-# No API key, no auth, no iframes, no rate limits.
+# TAB 7 — Telegram Channels (via RSSHub mirror fallback chain)
+# Tries 6 public RSSHub mirrors in order. Stops at first one that responds.
+# No setup, no token, no admin access required.
 #
 # ┌─────────────────────────────────────────────────────────────────┐
 # │  TO ADD A NEW TELEGRAM CHANNEL:                                 │
 # │  1. Find the channel's username (the part after t.me/)          │
-# │  2. Add a new tuple to TELEGRAM_CHANNELS below in this format:  │
-# │     ("Display Name", "username", "short description")           │
-# │  3. Save the file and push to GitHub — done.                    │
+# │  2. Add a new tuple to TELEGRAM_CHANNELS in this format:        │
+# │       ("Display Name", "username", "description")               │
+# │  3. Save and push to GitHub — done. No other changes needed.    │
 # └─────────────────────────────────────────────────────────────────┘
 # =============================================================================
 with tab_twitter:
     st.markdown("#### 📬 Channels — Telegram Market Feeds")
-    st.caption(
-        "Posts fetched via **RSSHub** (rsshub.app) — a free open-source RSS bridge for Telegram. "
-        "Refreshes every 10 min. To add a channel, edit `TELEGRAM_CHANNELS` in `app.py`."
-    )
+    st.caption("Posts fetched from public Telegram channels. Refreshes every 60 sec.")
 
     # ══════════════════════════════════════════════════════════════
     # ADD / REMOVE TELEGRAM CHANNELS HERE
@@ -1057,118 +1054,150 @@ with tab_twitter:
         ("Beat The Street News",             "Beatthestreetnews", "Latest share market news"),
         ("Beat The Street Equity Research",  "btsreports",        "Research reports & books"),
         # ── Add more channels below this line ─────────────────────
-        # ("Zerodha Varsity",   "zerodhaonline",     "Market education & insights"),
-        # ("Moneycontrol News", "moneycontrolcom",   "Business & markets coverage"),
-        # ("NSE India",         "NSEIndia",          "Official NSE announcements"),
+        # ("Zerodha Varsity",   "zerodhaonline",  "Market education & insights"),
+        # ("Moneycontrol News", "moneycontrol",   "Business & markets coverage"),
+        # ("NSE India",         "NSEIndia",       "Official NSE announcements"),
     ]
     # ══════════════════════════════════════════════════════════════
 
-    # Refresh telegram posts every 60 seconds when this tab is active
+    # ── Public RSSHub mirror list (tried in order, stops at first success) ────
+    # If all fail, the app shows a clean error with direct Telegram links.
+    # Update this list if mirrors go offline: https://docs.rsshub.app/instances
+    RSSHUB_MIRRORS = [
+        "https://rsshub.rssforever.com",
+        "https://rss.fatpandadev.com",
+        "https://hub.slar.in",
+        "https://rsshub.app",
+        "https://rsshub.woodland.cafe",
+        "https://rsshub.renovamen.ink",
+    ]
+
     if AUTOREFRESH_AVAILABLE:
         st_autorefresh(interval=60_000, key="telegram_refresh")
 
     @st.cache_data(ttl=60)
-    def fetch_telegram_rss(channel_username):
-        """Fetch a Telegram channel's posts via RSSHub's free RSS bridge."""
-        url = f"https://rsshub.app/telegram/channel/{channel_username}"
-        try:
-            feed = feedparser.parse(url)
-            items = []
-            for entry in feed.entries[:20]:
-                pub = entry.get("published", entry.get("updated", ""))
-                try:
-                    from email.utils import parsedate_to_datetime
-                    pub_str = parsedate_to_datetime(pub).strftime("%d %b %Y  %H:%M")
-                except Exception:
-                    pub_str = pub[:16] if pub else "—"
+    def fetch_telegram_channel(channel_username):
+        """
+        Try each RSSHub mirror in order. Return (posts, mirror_used, error).
+        Posts are returned on first mirror that gives a non-empty feed.
+        """
+        import re as _re
+        last_error = "All mirrors failed or returned empty feeds."
 
-                # Clean up the summary — strip HTML tags for plain preview
-                import re as _re
-                raw_summary = entry.get("summary", entry.get("description", ""))
-                clean_summary = _re.sub(r"<[^>]+>", " ", raw_summary).strip()
-                clean_summary = _re.sub(r"\s+", " ", clean_summary)[:280]
+        for mirror in RSSHUB_MIRRORS:
+            url = f"{mirror}/telegram/channel/{channel_username}"
+            try:
+                feed = feedparser.parse(url)
+                if not feed.entries:
+                    last_error = f"{mirror} returned 0 entries."
+                    continue
 
-                items.append({
-                    "title":     entry.get("title", clean_summary[:80] or "—"),
-                    "summary":   clean_summary,
-                    "link":      entry.get("link", f"https://t.me/{channel_username}"),
-                    "published": pub_str,
-                })
-            return items, None
-        except Exception as e:
-            return [], str(e)
+                posts = []
+                for entry in feed.entries[:25]:
+                    pub = entry.get("published", entry.get("updated", ""))
+                    try:
+                        from email.utils import parsedate_to_datetime
+                        pub_str = parsedate_to_datetime(pub).strftime("%d %b %Y  %H:%M")
+                    except Exception:
+                        pub_str = pub[:16] if pub else "—"
+
+                    raw = entry.get("summary", entry.get("description", ""))
+                    clean = _re.sub(r"<[^>]+>", " ", raw).strip()
+                    clean = _re.sub(r"\s+", " ", clean)[:300]
+
+                    title = entry.get("title", "")
+                    if not title or title == clean[:len(title)]:
+                        title = clean[:80] or "—"
+
+                    posts.append({
+                        "title":     title,
+                        "body":      clean if clean != title else "",
+                        "link":      entry.get("link", f"https://t.me/{channel_username}"),
+                        "published": pub_str,
+                    })
+
+                return posts, mirror, None   # success
+
+            except Exception as e:
+                last_error = f"{mirror}: {e}"
+                continue
+
+        return [], None, last_error   # all mirrors failed
 
     if not TELEGRAM_CHANNELS:
         st.info("No channels configured. Add entries to `TELEGRAM_CHANNELS` in `app.py`.")
     else:
-        # ── Channel selector tabs ─────────────────────────────────
         ch_labels = [name for name, _, _ in TELEGRAM_CHANNELS]
         ch_tabs   = st.tabs(ch_labels)
 
         for ch_tab, (display_name, handle, desc) in zip(ch_tabs, TELEGRAM_CHANNELS):
             with ch_tab:
-                tg_col1, tg_col2 = st.columns([5, 1])
-                with tg_col1:
+                # Header row
+                col_h1, col_h2 = st.columns([5, 1])
+                with col_h1:
                     st.markdown(f"**{display_name}** &nbsp;·&nbsp; `@{handle}`")
                     st.caption(desc)
-                with tg_col2:
-                    tg_link = f"https://t.me/{handle}"
+                with col_h2:
                     st.markdown(
-                        f'<a href="{tg_link}" target="_blank" '
+                        f'<a href="https://t.me/{handle}" target="_blank" '
                         f'style="display:inline-block;background:#0057b8;color:#fff;'
                         f'padding:5px 14px;border-radius:6px;font-size:.75rem;'
                         f'font-weight:600;text-decoration:none;font-family:Inter,sans-serif;">'
-                        f'Open on Telegram ↗</a>',
+                        f'Open ↗</a>',
                         unsafe_allow_html=True
                     )
-
                 st.markdown("---")
 
                 with st.spinner(f"Fetching posts from @{handle}…"):
-                    posts, err = fetch_telegram_rss(handle)
+                    posts, mirror_used, err = fetch_telegram_channel(handle)
 
                 if err:
                     st.warning(
-                        f"⚠️ Could not fetch @{handle} via RSSHub. "
-                        f"This usually means RSSHub is temporarily overloaded — try refreshing in a minute. "
-                        f"Error: `{err}`"
+                        f"⚠️ Could not load posts for **@{handle}** right now.\n\n"
+                        f"All RSS mirrors are temporarily unavailable (common during market hours). "
+                        f"The dashboard retries automatically every 60 seconds.\n\n"
+                        f"Last error: `{err}`"
+                    )
+                    st.markdown(
+                        f'<a href="https://t.me/{handle}" target="_blank" '
+                        f'style="display:inline-block;background:#f1f5f9;color:#0057b8;border:1px solid #e2e8f0;'
+                        f'padding:7px 16px;border-radius:6px;font-size:.82rem;font-weight:600;'
+                        f'text-decoration:none;font-family:Inter,sans-serif;">'
+                        f'📬 Open @{handle} directly on Telegram ↗</a>',
+                        unsafe_allow_html=True
                     )
                 elif not posts:
-                    st.info(
-                        f"No posts found for @{handle}. "
-                        f"The channel may be private, empty, or RSSHub may not have indexed it yet."
-                    )
+                    st.info(f"No posts found for @{handle}. The channel may be private.")
                 else:
-                    st.caption(f"Showing {len(posts)} most recent posts · Refreshes every 10 min")
+                    mirror_short = mirror_used.replace("https://", "").split("/")[0]
+                    st.caption(
+                        f"{len(posts)} recent posts · via {mirror_short} · "
+                        f"Refreshes every 60 sec · Latest first"
+                    )
                     for post in posts:
-                        # Truncate title if it's just a repeat of summary
-                        title_display = post["title"] if len(post["title"]) < 120 else post["title"][:117] + "…"
-                        summary_display = post["summary"] if post["summary"] and post["summary"] != post["title"] else ""
-
+                        body_html = (
+                            f'<div style="font-size:.8rem;color:#475569;margin-top:4px;line-height:1.5;">'
+                            f'{post["body"]}</div>'
+                        ) if post["body"] else ""
                         st.markdown(
-                            f"""<div class="news-card">
-                              <div class="news-headline">
-                                <a href="{post['link']}" target="_blank"
-                                   style="color:#0057b8;text-decoration:none;">
-                                  {title_display}
-                                </a>
-                              </div>
-                              {'<div style="font-size:.8rem;color:#475569;margin-top:4px;line-height:1.5;">' + summary_display + '</div>' if summary_display else ''}
-                              <div class="news-meta">📬 @{handle} &nbsp;·&nbsp; 🕐 {post['published']}</div>
-                            </div>""",
+                            f'<div class="news-card">'
+                            f'<div class="news-headline">'
+                            f'<a href="{post["link"]}" target="_blank" style="color:#0057b8;text-decoration:none;">'
+                            f'{post["title"]}</a></div>'
+                            f'{body_html}'
+                            f'<div class="news-meta">📬 @{handle} &nbsp;·&nbsp; 🕐 {post["published"]}</div>'
+                            f'</div>',
                             unsafe_allow_html=True
                         )
 
     st.markdown("---")
     st.markdown(
         '<div style="font-size:.72rem;color:#94a3b8;font-family:JetBrains Mono,monospace;">'
-        "📬 Posts fetched via rsshub.app · Free open-source RSS bridge · "
-        "RSSHub only works for public Telegram channels. "
-        "Data refreshes every 10 minutes."
+        "📬 Posts via public RSSHub mirrors · Auto-retries on failure · "
+        "Refreshes every 60 sec · Only works for public Telegram channels."
         "</div>",
         unsafe_allow_html=True
     )
-
 
 # =============================================================================
 # FOOTER
