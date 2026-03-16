@@ -886,33 +886,57 @@ with tab_news:
 # TAB 5 — Economic Calendar
 # =============================================================================
 with tab_calendar:
-    st.markdown("#### Economic Calendar — Major Events")
+    st.markdown("#### 📅 Economic Calendar — 2026")
+
+    # ── TradingEconomics link (they block iframes — direct link is the only option) ──
+    st.markdown(
+        '<a href="https://tradingeconomics.com/calendar" target="_blank" '
+        'style="display:inline-flex;align-items:center;gap:8px;'
+        'background:#0057b8;color:#fff;padding:9px 20px;border-radius:7px;'
+        'font-size:.85rem;font-weight:600;text-decoration:none;'
+        'font-family:Inter,sans-serif;margin-bottom:14px;display:inline-block;">'
+        '📊 Open TradingEconomics Calendar ↗</a>',
+        unsafe_allow_html=True
+    )
     st.caption(
-        "📝 **How to update:** Edit the `events` list in `app.py` under `# ── CALENDAR DATA ──`. "
-        "Add rows as `{'Date': 'DD Mon YYYY', 'Time': 'HH:MM IST', 'Event': '...', 'Country': '...', 'Impact': 'High/Medium/Low'}`."
+        "TradingEconomics cannot be embedded (they block iframes). "
+        "Click above to open their full live calendar in a new tab. "
+        "The table below has key India & global events for 2026 — "
+        "**update it** by editing `events` under `# ── CALENDAR DATA ──` in `app.py`."
     )
 
     # ── CALENDAR DATA ── (Update this list manually when dates change)
+    # Source: federalreserve.gov (FOMC), rbi.org.in (RBI MPC), ecb.europa.eu (ECB)
+    # All times in IST. ✅ = already announced/passed. Upcoming = still relevant.
     events = [
-        {"Date": "20 Mar 2025", "Time": "10:00 IST", "Event": "RBI Monetary Policy Decision",       "Country": "🇮🇳 India", "Impact": "High"},
-        {"Date": "19 Mar 2025", "Time": "23:30 IST", "Event": "US FOMC Rate Decision",              "Country": "🇺🇸 USA",   "Impact": "High"},
-        {"Date": "20 Mar 2025", "Time": "18:30 IST", "Event": "US CPI Inflation (Feb)",             "Country": "🇺🇸 USA",   "Impact": "High"},
-        {"Date": "28 Mar 2025", "Time": "18:30 IST", "Event": "US PCE Price Index (Feb)",           "Country": "🇺🇸 USA",   "Impact": "High"},
-        {"Date": "31 Mar 2025", "Time": "17:30 IST", "Event": "India GDP Growth (Q3 FY25)",         "Country": "🇮🇳 India", "Impact": "High"},
-        {"Date": "04 Apr 2025", "Time": "18:30 IST", "Event": "US Non-Farm Payrolls (Mar)",         "Country": "🇺🇸 USA",   "Impact": "High"},
-        {"Date": "07 Apr 2025", "Time": "18:30 IST", "Event": "US CPI Inflation (Mar)",             "Country": "🇺🇸 USA",   "Impact": "High"},
-        {"Date": "09 Apr 2025", "Time": "18:30 IST", "Event": "US PPI (Mar)",                       "Country": "🇺🇸 USA",   "Impact": "Medium"},
-        {"Date": "09 Apr 2025", "Time": "18:00 IST", "Event": "ECB Rate Decision",                  "Country": "🇪🇺 EU",    "Impact": "High"},
-        {"Date": "30 Apr 2025", "Time": "20:30 IST", "Event": "US GDP Growth (Q1 2025 Advance)",    "Country": "🇺🇸 USA",   "Impact": "High"},
-        {"Date": "07 May 2025", "Time": "10:00 IST", "Event": "RBI Monetary Policy Decision",       "Country": "🇮🇳 India", "Impact": "High"},
-        {"Date": "07 May 2025", "Time": "23:30 IST", "Event": "US FOMC Rate Decision",              "Country": "🇺🇸 USA",   "Impact": "High"},
-        {"Date": "02 May 2025", "Time": "18:30 IST", "Event": "US Non-Farm Payrolls (Apr)",         "Country": "🇺🇸 USA",   "Impact": "High"},
-        {"Date": "15 May 2025", "Time": "18:30 IST", "Event": "US CPI Inflation (Apr)",             "Country": "🇺🇸 USA",   "Impact": "High"},
-        {"Date": "18 Jun 2025", "Time": "23:30 IST", "Event": "US FOMC Rate Decision",              "Country": "🇺🇸 USA",   "Impact": "High"},
-        {"Date": "06 Aug 2025", "Time": "23:30 IST", "Event": "US FOMC Rate Decision",              "Country": "🇺🇸 USA",   "Impact": "High"},
-        {"Date": "17 Sep 2025", "Time": "23:30 IST", "Event": "US FOMC Rate Decision",              "Country": "🇺🇸 USA",   "Impact": "High"},
-        {"Date": "05 Nov 2025", "Time": "23:30 IST", "Event": "US FOMC Rate Decision",              "Country": "🇺🇸 USA",   "Impact": "High"},
-        {"Date": "17 Dec 2025", "Time": "23:30 IST", "Event": "US FOMC Rate Decision",              "Country": "🇺🇸 USA",   "Impact": "High"},
+        # ── Already occurred in 2026 ──────────────────────────────────────────
+        {"Date": "28 Jan 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision (held at 3.50–3.75%)", "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "✅ Done"},
+        {"Date": "06 Feb 2026", "Time": "10:00 IST", "Event": "RBI MPC Decision (held at 5.25%)",           "Country": "🇮🇳 India", "Impact": "High",   "Status": "✅ Done"},
+        {"Date": "12 Feb 2026", "Time": "19:00 IST", "Event": "US CPI Inflation (Jan 2026)",                "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "✅ Done"},
+        {"Date": "06 Mar 2026", "Time": "18:30 IST", "Event": "US Non-Farm Payrolls (Feb 2026)",            "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "✅ Done"},
+        {"Date": "12 Mar 2026", "Time": "19:00 IST", "Event": "US CPI Inflation (Feb 2026)",                "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "✅ Done"},
+        # ── Upcoming ──────────────────────────────────────────────────────────
+        {"Date": "19 Mar 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision + SEP Projections",   "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "20 Mar 2026", "Time": "18:30 IST", "Event": "US PCE Price Index (Feb 2026)",              "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "27 Mar 2026", "Time": "18:30 IST", "Event": "US GDP Q4 2025 (Final)",                    "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "03 Apr 2026", "Time": "18:30 IST", "Event": "US Non-Farm Payrolls (Mar 2026)",            "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "08 Apr 2026", "Time": "10:00 IST", "Event": "RBI MPC Decision",                          "Country": "🇮🇳 India", "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "10 Apr 2026", "Time": "19:00 IST", "Event": "US CPI Inflation (Mar 2026)",                "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "17 Apr 2026", "Time": "19:15 IST", "Event": "ECB Rate Decision",                         "Country": "🇪🇺 EU",    "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "30 Apr 2026", "Time": "20:00 IST", "Event": "US GDP Q1 2026 (Advance Estimate)",         "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "07 May 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision",                     "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "08 May 2026", "Time": "18:30 IST", "Event": "US Non-Farm Payrolls (Apr 2026)",            "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "13 May 2026", "Time": "19:00 IST", "Event": "US CPI Inflation (Apr 2026)",                "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "05 Jun 2026", "Time": "19:15 IST", "Event": "ECB Rate Decision",                         "Country": "🇪🇺 EU",    "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "Jun 2026",    "Time": "10:00 IST", "Event": "RBI MPC Decision (date TBC)",               "Country": "🇮🇳 India", "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "18 Jun 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision + SEP Projections",   "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "30 Jul 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision",                     "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "Aug 2026",    "Time": "10:00 IST", "Event": "RBI MPC Decision (date TBC)",               "Country": "🇮🇳 India", "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "17 Sep 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision + SEP Projections",   "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "Oct 2026",    "Time": "10:00 IST", "Event": "RBI MPC Decision (date TBC)",               "Country": "🇮🇳 India", "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "29 Oct 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision",                     "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "10 Dec 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision + SEP Projections",   "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "Dec 2026",    "Time": "10:00 IST", "Event": "RBI MPC Decision (date TBC)",               "Country": "🇮🇳 India", "Impact": "High",   "Status": "🔜 Upcoming"},
     ]
     # ── END CALENDAR DATA ──
 
@@ -923,26 +947,39 @@ with tab_calendar:
         elif val == "Medium": return "color: #d97706; font-weight: 600"
         return "color: #16a34a"
 
-    cc1, cc2 = st.columns([1, 2])
+    def status_color(val):
+        if "Done" in str(val):     return "color: #94a3b8"
+        if "Upcoming" in str(val): return "color: #0057b8; font-weight: 600"
+        return ""
+
+    cc1, cc2, cc3 = st.columns([1, 1, 2])
     with cc1:
-        impact_filter = st.multiselect("Impact Filter", ["High", "Medium", "Low"], default=["High", "Medium"])
+        impact_filter = st.multiselect("Impact", ["High", "Medium", "Low"], default=["High", "Medium"])
     with cc2:
-        country_filter = st.multiselect("Country Filter", cal_df["Country"].unique().tolist(),
+        status_filter = st.multiselect("Status", ["✅ Done", "🔜 Upcoming"], default=["🔜 Upcoming"])
+    with cc3:
+        country_filter = st.multiselect("Country", cal_df["Country"].unique().tolist(),
                                         default=cal_df["Country"].unique().tolist())
 
-    filtered_cal = cal_df[cal_df["Impact"].isin(impact_filter) & cal_df["Country"].isin(country_filter)]
+    filtered_cal = cal_df[
+        cal_df["Impact"].isin(impact_filter) &
+        cal_df["Status"].isin(status_filter) &
+        cal_df["Country"].isin(country_filter)
+    ]
     st.dataframe(
-        filtered_cal.style.applymap(impact_color, subset=["Impact"]),
-        use_container_width=True, height=480, hide_index=True
+        filtered_cal.style
+            .applymap(impact_color, subset=["Impact"])
+            .applymap(status_color, subset=["Status"]),
+        use_container_width=True, height=500, hide_index=True
     )
 
     st.markdown("---")
-    with st.expander("📅 TradingView Economic Calendar (Live)"):
-        tv_cal_html = """
-        <iframe src="https://s.tradingview.com/embed-widget/events/?locale=en#%7B%22colorTheme%22%3A%22light%22%2C%22isTransparent%22%3Atrue%2C%22width%22%3A%22100%25%22%2C%22height%22%3A%22450%22%2C%22importanceFilter%22%3A%22-1%2C0%2C1%22%2C%22countryFilter%22%3A%22in%2Cus%2Ceu%22%7D"
-            style="width:100%;height:450px;border:none;" allowtransparency="true">
-        </iframe>"""
-        st.components.v1.html(tv_cal_html, height=460)
+    st.markdown("##### 📺 Live Economic Calendar (TradingView)")
+    tv_cal_html = """
+    <iframe src="https://s.tradingview.com/embed-widget/events/?locale=en#%7B%22colorTheme%22%3A%22light%22%2C%22isTransparent%22%3Afalse%2C%22width%22%3A%22100%25%22%2C%22height%22%3A%22500%22%2C%22importanceFilter%22%3A%22-1%2C0%2C1%22%2C%22countryFilter%22%3A%22in%2Cus%2Ceu%2Cgb%2Cjp%22%7D"
+        style="width:100%;height:500px;border:none;border-radius:8px;" allowtransparency="true">
+    </iframe>"""
+    st.components.v1.html(tv_cal_html, height=510)
 
 
 # =============================================================================
@@ -1586,93 +1623,210 @@ with tab_holdings:
 
             st.markdown("---")
 
-            # ── Red Flags & Buy/Hold/Sell Signals ─────────────────────────────
-            st.markdown("##### 🚨 Red Flags & Signals")
-            st.caption("Automated screening: pledged shares, returns, RSI, MACD, 200 EMA. Not financial advice.")
+            # ================================================================
+            # RED FLAGS & BUY/HOLD/SELL SIGNALS
+            # Technical: RSI, MACD, 200 EMA, 50 EMA, Bollinger, 52w position
+            # Fundamental: P/E, P/B, Debt/Equity, ROE, profit margin,
+            #              current ratio, EPS growth, revenue growth
+            # ================================================================
+            st.markdown("##### \U0001f6a8 Red Flags & Signals")
+            st.caption("Technical + Fundamental screening for all holdings. Not financial advice.")
+
+            @st.cache_data(ttl=3600)
+            def get_fundamentals(sym):
+                try:
+                    t    = yf.Ticker(f"{sym}.NS")
+                    info = t.info
+                    eps_trail = info.get("trailingEps")
+                    eps_fwd   = info.get("forwardEps")
+                    eps_g = ((eps_fwd - eps_trail) / abs(eps_trail) * 100
+                             if eps_trail and eps_fwd and eps_trail != 0 else None)
+                    rev_g = None
+                    try:
+                        inc = t.income_stmt
+                        if inc is not None and not inc.empty and "Total Revenue" in inc.index:
+                            revs = inc.loc["Total Revenue"].dropna()
+                            if len(revs) >= 2:
+                                rev_g = (revs.iloc[0]-revs.iloc[1])/abs(revs.iloc[1])*100
+                    except Exception:
+                        pass
+                    return {
+                        "pe": info.get("trailingPE"), "pb": info.get("priceToBook"),
+                        "de": info.get("debtToEquity"), "roe": info.get("returnOnEquity"),
+                        "profit_mg": info.get("profitMargins"),
+                        "current_r": info.get("currentRatio"),
+                        "eps_growth": eps_g, "rev_growth": rev_g,
+                        "beta": info.get("beta"),
+                    }
+                except Exception:
+                    return {}
 
             @st.cache_data(ttl=300)
-            def get_signals_for_symbol(sym):
+            def get_technicals(sym):
                 try:
                     df_t = yf.download(f"{sym}.NS", period="1y", interval="1d",
                                        progress=False, auto_adjust=True)
                     if df_t.empty or len(df_t) < 30:
                         return None
                     close = df_t["Close"].squeeze()
-                    delta = close.diff()
-                    gain  = delta.clip(lower=0).ewm(com=13, min_periods=14).mean()
-                    loss  = (-delta.clip(upper=0)).ewm(com=13, min_periods=14).mean()
-                    rsi   = float((100 - 100/(1 + gain/loss.replace(0, 0.0001))).iloc[-1])
-                    ema200 = float(close.ewm(span=200, adjust=False).mean().iloc[-1])
+                    high  = df_t["High"].squeeze()
+                    low   = df_t["Low"].squeeze()
+                    d = close.diff()
+                    g = d.clip(lower=0).ewm(com=13, min_periods=14).mean()
+                    l = (-d.clip(upper=0)).ewm(com=13, min_periods=14).mean()
+                    rsi    = float((100 - 100/(1+g/l.replace(0,0.0001))).iloc[-1])
+                    ema50  = float(close.ewm(span=50, adjust=False).mean().iloc[-1])
+                    ema200 = float(close.ewm(span=200,adjust=False).mean().iloc[-1])
                     ltp    = float(close.iloc[-1])
                     macd   = close.ewm(span=12,adjust=False).mean() - close.ewm(span=26,adjust=False).mean()
                     sig_ln = macd.ewm(span=9, adjust=False).mean()
+                    sma20  = close.rolling(20).mean()
+                    std20  = close.rolling(20).std()
+                    bb_up  = float((sma20+2*std20).iloc[-1])
+                    bb_lo  = float((sma20-2*std20).iloc[-1])
+                    w52_h  = float(high.tail(252).max())
+                    w52_l  = float(low.tail(252).min())
+                    w52p   = (ltp-w52_l)/(w52_h-w52_l)*100 if w52_h != w52_l else 50
+                    vol    = df_t["Volume"].squeeze()
                     return {
-                        "rsi":       round(rsi,1),
-                        "above_ema": ltp > ema200,
+                        "rsi": round(rsi,1), "ltp": round(ltp,2),
+                        "ema50": round(ema50,2), "ema200": round(ema200,2),
+                        "above_50": ltp>ema50, "above_200": ltp>ema200,
+                        "macd_val": float(macd.iloc[-1]),
                         "macd_bull": bool(macd.iloc[-1]>sig_ln.iloc[-1] and macd.iloc[-2]<=sig_ln.iloc[-2]),
                         "macd_bear": bool(macd.iloc[-1]<sig_ln.iloc[-1] and macd.iloc[-2]>=sig_ln.iloc[-2]),
-                        "macd_pos":  bool(macd.iloc[-1] > 0),
+                        "macd_pos":  bool(macd.iloc[-1]>0),
+                        "bb_upper": round(bb_up,2), "bb_lower": round(bb_lo,2),
+                        "above_bb": ltp>bb_up, "below_bb": ltp<bb_lo,
+                        "w52_pos": round(w52p,1),
+                        "vol_surge": bool(float(vol.tail(20).mean()) > float(vol.tail(50).mean())*1.5),
                     }
                 except Exception:
                     return None
 
-            def compute_signal(sig, ret_pct, pledge_pct):
-                if sig is None:
-                    return "HOLD", 0
+            def score_and_flags(tech, fund, ret_pct, pledge_pct):
                 score = 0
-                if sig["above_ema"]: score += 2
-                else:                score -= 2
-                if sig["rsi"] < 40:  score += 2
-                elif sig["rsi"] > 70:score -= 2
-                if sig["macd_bull"]: score += 2
-                if sig["macd_bear"]: score -= 2
-                if sig["macd_pos"]:  score += 1
-                else:                score -= 1
-                if ret_pct > 50:     score += 1
-                if ret_pct < -20:    score -= 1
-                if pledge_pct > 50:  score -= 2
-                if score >= 4:  return "BUY",  score
-                if score <= -2: return "SELL", score
-                return "HOLD", score
+                tf = []   # technical flags
+                ff = []   # fundamental flags
+
+                if tech:
+                    if tech["above_200"]:
+                        score += 2
+                    else:
+                        score -= 2; tf.append("\U0001f534 Below 200 EMA \u2014 long-term downtrend")
+                    if tech["above_50"]:
+                        score += 1
+                    else:
+                        score -= 1; tf.append("\U0001f7e1 Below 50 EMA \u2014 medium-term downtrend")
+                    if tech["rsi"] < 35:
+                        score += 2; tf.append(f"\U0001f7e2 RSI oversold ({tech['rsi']}) \u2014 potential bounce zone")
+                    elif tech["rsi"] > 72:
+                        score -= 2; tf.append(f"\U0001f534 RSI overbought ({tech['rsi']}) \u2014 caution on new longs")
+                    if tech["macd_bull"]:
+                        score += 2; tf.append("\U0001f7e2 MACD bullish crossover \u2014 momentum shifting up")
+                    elif tech["macd_bear"]:
+                        score -= 2; tf.append("\U0001f534 MACD bearish crossover \u2014 momentum shifting down")
+                    elif tech["macd_pos"]:
+                        score += 1
+                    else:
+                        score -= 1
+                    if tech["above_bb"]:
+                        score -= 1; tf.append("\U0001f7e1 Above upper Bollinger Band \u2014 overextended")
+                    elif tech["below_bb"]:
+                        score += 1; tf.append("\U0001f7e2 Below lower Bollinger Band \u2014 potential reversal zone")
+                    if tech["w52_pos"] > 90:
+                        tf.append(f"\U0001f7e1 Near 52w high ({tech['w52_pos']:.0f}% of range)")
+                    elif tech["w52_pos"] < 15:
+                        tf.append(f"\U0001f534 Near 52w low ({tech['w52_pos']:.0f}% of range)")
+                    if tech["vol_surge"]:
+                        tf.append("\U0001f7e2 Volume surge (20d avg > 1.5x 50d avg)")
+
+                if fund:
+                    pe = fund.get("pe"); pb = fund.get("pb"); de = fund.get("de")
+                    roe = fund.get("roe"); pm = fund.get("profit_mg")
+                    cr = fund.get("current_r"); eps_g = fund.get("eps_growth")
+                    rev_g = fund.get("rev_growth"); beta = fund.get("beta")
+                    if pe is not None:
+                        if pe < 0:
+                            score -= 2; ff.append(f"\U0001f534 Negative P/E ({pe:.1f}) \u2014 company in losses")
+                        elif pe > 60:
+                            score -= 1; ff.append(f"\U0001f7e1 High P/E ({pe:.1f}) \u2014 expensive valuation")
+                        elif 0 < pe < 12:
+                            score += 1; ff.append(f"\U0001f7e2 Low P/E ({pe:.1f}) \u2014 potentially undervalued")
+                    if pb is not None and pb > 8:
+                        score -= 1; ff.append(f"\U0001f7e1 High P/B ({pb:.1f}) \u2014 expensive vs book value")
+                    if de is not None:
+                        if de > 200:
+                            score -= 2; ff.append(f"\U0001f534 High D/E ({de:.0f}%) \u2014 elevated debt burden")
+                        elif de > 100:
+                            score -= 1; ff.append(f"\U0001f7e1 Moderate D/E ({de:.0f}%)")
+                        elif de < 20:
+                            score += 1; ff.append(f"\U0001f7e2 Low D/E ({de:.0f}%) \u2014 strong balance sheet")
+                    if roe is not None:
+                        r = roe*100
+                        if r > 20:   score += 1; ff.append(f"\U0001f7e2 Strong ROE ({r:.1f}%)")
+                        elif r < 5:  score -= 1; ff.append(f"\U0001f534 Weak ROE ({r:.1f}%)")
+                    if pm is not None:
+                        p = pm*100
+                        if p < 0:    score -= 2; ff.append(f"\U0001f534 Negative profit margin ({p:.1f}%)")
+                        elif p < 3:  score -= 1; ff.append(f"\U0001f7e1 Very thin margin ({p:.1f}%)")
+                    if cr is not None:
+                        if cr < 1.0: score -= 2; ff.append(f"\U0001f534 Low current ratio ({cr:.2f}) \u2014 liquidity risk")
+                        elif cr < 1.5: score -= 1; ff.append(f"\U0001f7e1 Tight current ratio ({cr:.2f})")
+                    if eps_g is not None:
+                        if eps_g > 15:  score += 2; ff.append(f"\U0001f7e2 Strong EPS growth ({eps_g:+.1f}%)")
+                        elif eps_g < -15: score -= 2; ff.append(f"\U0001f534 EPS declining ({eps_g:+.1f}%)")
+                    if rev_g is not None:
+                        if rev_g < -10:  score -= 1; ff.append(f"\U0001f534 Revenue declining ({rev_g:+.1f}% YoY)")
+                        elif rev_g > 20: score += 1; ff.append(f"\U0001f7e2 Strong revenue growth ({rev_g:+.1f}% YoY)")
+                    if beta is not None and beta > 2.0:
+                        ff.append(f"\U0001f7e1 High beta ({beta:.2f}) \u2014 highly volatile stock")
+
+                if pledge_pct > 70:
+                    score -= 2; ff.append(f"\U0001f534 Promoter pledge {pledge_pct:.0f}% \u2014 major red flag")
+                elif pledge_pct > 30:
+                    score -= 1; ff.append(f"\U0001f7e1 Promoter pledge {pledge_pct:.0f}%")
+                if ret_pct < -25:
+                    score -= 1; ff.append(f"\U0001f534 Portfolio loss {ret_pct:+.1f}%")
+                elif ret_pct > 100:
+                    ff.append(f"\U0001f7e2 Multi-bagger {ret_pct:+.0f}% \u2014 consider partial profit booking")
+
+                label = "BUY" if score >= 5 else "SELL" if score <= -3 else "HOLD"
+                return label, score, tf, ff
 
             rf_rows = []
             pledge_col_m = "Quantity Pledged (Margin)" if "Quantity Pledged (Margin)" in df_h.columns else None
             pledge_col_l = "Quantity Pledged (Loan)"   if "Quantity Pledged (Loan)"   in df_h.columns else None
-            prog = st.progress(0, text="Analysing holdings…")
+            prog = st.progress(0, text="Running analysis\u2026")
 
             for i, row in df_h.iterrows():
                 sym     = row["Symbol"]
                 ret_pct = float(row.get("Return %", 0) or 0)
                 qty     = float(row.get("Qty", 1) or 1)
-                pm = float(str(row.get(pledge_col_m, 0) or 0)) if pledge_col_m else 0
-                pl = float(str(row.get(pledge_col_l, 0) or 0)) if pledge_col_l else 0
-                pledge_pct = (pm + pl) / qty * 100
+                pm  = float(str(row.get(pledge_col_m, 0) or 0)) if pledge_col_m else 0
+                pl  = float(str(row.get(pledge_col_l, 0) or 0)) if pledge_col_l else 0
+                pledge_pct = (pm+pl)/qty*100
 
-                sig            = get_signals_for_symbol(sym)
-                label, score   = compute_signal(sig, ret_pct, pledge_pct)
-
-                flags = []
-                if pledge_pct > 70: flags.append(f"🔴 Pledge {pledge_pct:.0f}%")
-                elif pledge_pct > 30: flags.append(f"🟡 Pledge {pledge_pct:.0f}%")
-                if ret_pct < -25:   flags.append(f"🔴 Loss {ret_pct:+.1f}%")
-                elif ret_pct < -15: flags.append(f"🟡 Loss {ret_pct:+.1f}%")
-                if sig:
-                    if not sig["above_ema"]:  flags.append("🔴 Below 200EMA")
-                    if sig["rsi"] > 75:       flags.append(f"🟡 RSI overbought {sig['rsi']}")
-                    if sig["rsi"] < 25:       flags.append(f"🟡 RSI oversold {sig['rsi']}")
-                    if sig["macd_bear"]:      flags.append("🟡 MACD bearish cross")
+                tech = get_technicals(sym)
+                fund = get_fundamentals(sym)
+                label, score, t_flags, f_flags = score_and_flags(tech, fund, ret_pct, pledge_pct)
 
                 rf_rows.append({
-                    "Symbol":    sym,
-                    "Sector":    row.get("Sector",""),
-                    "Signal":    label,
-                    "Score":     score,
-                    "RSI":       sig["rsi"] if sig else "—",
-                    "vs 200EMA": ("Above" if sig["above_ema"] else "Below") if sig else "—",
-                    "Pledged%":  f"{pledge_pct:.0f}%",
-                    "Red Flags": " · ".join(flags) if flags else "✅ None",
+                    "Symbol":     sym,
+                    "Sector":     row.get("Sector",""),
+                    "Signal":     label,
+                    "Score":      score,
+                    "RSI":        tech["rsi"] if tech else "\u2014",
+                    "vs 200EMA":  ("Above" if tech["above_200"] else "Below") if tech else "\u2014",
+                    "P/E":        round(fund["pe"],1) if fund and fund.get("pe") else "\u2014",
+                    "D/E %":      round(fund["de"],0) if fund and fund.get("de") else "\u2014",
+                    "ROE %":      round(fund["roe"]*100,1) if fund and fund.get("roe") else "\u2014",
+                    "EPS Gr.":    f"{fund['eps_growth']:+.1f}%" if fund and fund.get("eps_growth") else "\u2014",
+                    "Pledged%":   f"{pledge_pct:.0f}%",
+                    "Tech Flags": " | ".join(t_flags) if t_flags else "\u2705 Clean",
+                    "Fund Flags": " | ".join(f_flags) if f_flags else "\u2705 Clean",
                 })
-                prog.progress((i+1)/len(df_h), text=f"Analysing {sym}…")
+                prog.progress((i+1)/len(df_h), text=f"Analysing {sym}\u2026")
 
             prog.empty()
             rf_df = pd.DataFrame(rf_rows).sort_values("Score", ascending=True)
@@ -1680,65 +1834,65 @@ with tab_holdings:
             def _sc(val):
                 if val == "BUY":  return "color:#16a34a;font-weight:700"
                 if val == "SELL": return "color:#dc2626;font-weight:700"
-                if val == "HOLD": return "color:#d97706;font-weight:700"
-                return ""
+                return "color:#d97706;font-weight:700"
             def _fc(val):
-                if "🔴" in str(val): return "color:#dc2626"
-                if "🟡" in str(val): return "color:#d97706"
-                if "✅" in str(val): return "color:#16a34a"
-                return ""
+                s = str(val)
+                if "\U0001f534" in s: return "color:#dc2626;font-size:.78rem"
+                if "\U0001f7e1" in s: return "color:#d97706;font-size:.78rem"
+                if "\U0001f7e2" in s or "\u2705" in s: return "color:#16a34a;font-size:.78rem"
+                return "font-size:.78rem"
 
             st.dataframe(
-                rf_df.style.applymap(_sc, subset=["Signal"]).applymap(_fc, subset=["Red Flags"]),
+                rf_df.style
+                    .applymap(_sc, subset=["Signal"])
+                    .applymap(_fc, subset=["Tech Flags","Fund Flags"]),
                 use_container_width=True,
-                height=min(60+len(rf_df)*36, 520),
+                height=min(60+len(rf_df)*36, 560),
                 hide_index=True,
             )
-            st.caption("Score ≥4 = BUY · ≤−2 = SELL · else HOLD. Screening only — not financial advice.")
+            st.caption(
+                "Technical: RSI \u00b7 MACD \u00b7 200 EMA \u00b7 50 EMA \u00b7 Bollinger \u00b7 52w position \u00b7 Volume  |  "
+                "Fundamental: P/E \u00b7 P/B \u00b7 D/E \u00b7 ROE \u00b7 Margin \u00b7 Current ratio \u00b7 EPS/Rev growth  |  "
+                "Score \u22655 = BUY \u00b7 \u2264\u22123 = SELL \u00b7 else HOLD \u2014 screening only, not financial advice."
+            )
 
             st.markdown("---")
 
-            # ── Portfolio News Feed — All Holdings ────────────────────────────
-            st.markdown("##### 📰 Portfolio News Feed")
-            st.caption("All holdings · Yahoo Finance · Mint · Business Standard · NSE Announcements")
+            # ================================================================
+            # PORTFOLIO NEWS FEED — PER COMPANY SCROLLABLE PANELS
+            # 2 companies per row, each panel has sticky header + scrollable body
+            # Sources: Yahoo Finance, Mint, Business Standard, NSE Announcements
+            # ================================================================
+            st.markdown("##### \U0001f4f0 Portfolio News Feed")
+            st.caption("Each panel shows all news for one company. Scroll within each panel. 2 columns, sorted by portfolio value.")
 
             @st.cache_data(ttl=300)
             def fetch_portfolio_news(symbols_tuple):
-                import re as _re
                 all_items = []
                 sym_set = set(s.upper() for s in symbols_tuple)
 
-                # Yahoo Finance RSS per symbol
                 for sym in symbols_tuple:
                     url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={sym}.NS&region=IN&lang=en-IN"
                     for item in fetch_rss(url):
-                        item["symbol"]      = sym
-                        item["source_type"] = "Yahoo Finance"
+                        item["symbol"] = sym; item["source_type"] = "Yahoo Finance"
                         all_items.append(item)
 
-                # Mint RSS (filter by symbol match in title)
                 for url in ["https://www.livemint.com/rss/markets",
                             "https://www.livemint.com/rss/companies"]:
                     for item in fetch_rss(url):
-                        txt = item["title"].upper()
-                        m = next((s for s in sym_set if s in txt), None)
+                        m = next((s for s in sym_set if s in item["title"].upper()), None)
                         if m:
-                            item["symbol"]      = m
-                            item["source_type"] = "Mint"
+                            item["symbol"] = m; item["source_type"] = "Mint"
                             all_items.append(item)
 
-                # Business Standard RSS (filter by symbol match in title)
                 for url in ["https://www.business-standard.com/rss/markets-106.rss",
                             "https://www.business-standard.com/rss/companies-101.rss"]:
                     for item in fetch_rss(url):
-                        txt = item["title"].upper()
-                        m = next((s for s in sym_set if s in txt), None)
+                        m = next((s for s in sym_set if s in item["title"].upper()), None)
                         if m:
-                            item["symbol"]      = m
-                            item["source_type"] = "Business Standard"
+                            item["symbol"] = m; item["source_type"] = "Business Standard"
                             all_items.append(item)
 
-                # NSE Corporate Announcements API
                 nse_hdrs = {
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
                     "Accept": "application/json, text/plain, */*",
@@ -1753,7 +1907,7 @@ with tab_holdings:
                             url  = f"https://www.nseindia.com/api/corp-info?symbol={sym}&corpType=announcements&FMTType=0"
                             resp = sess.get(url, headers=nse_hdrs, timeout=7)
                             anns = resp.json()
-                            for ann in (anns.get("annDetails") or anns.get("data") or [])[:6]:
+                            for ann in (anns.get("annDetails") or anns.get("data") or [])[:8]:
                                 title = ann.get("subject") or ann.get("headline","")
                                 link  = ann.get("attchmntFile","")
                                 if link and not link.startswith("http"):
@@ -1761,108 +1915,142 @@ with tab_holdings:
                                 pub_str = ann.get("exchdisstime","") or ann.get("date","")
                                 pub_dt  = None
                                 try:
-                                    from datetime import datetime as _dt
-                                    pub_dt  = _dt.strptime(pub_str[:16], "%d-%b-%Y %H:%M")
+                                    from datetime import datetime as _dt2
+                                    pub_dt  = _dt2.strptime(pub_str[:16], "%d-%b-%Y %H:%M")
                                     pub_str = pub_dt.strftime("%d %b %Y  %H:%M")
                                 except Exception:
                                     pass
                                 if title:
                                     all_items.append({
-                                        "title":       title,
-                                        "link":        link or f"https://www.nseindia.com/get-quotes/equity?symbol={sym}",
-                                        "published":   pub_str or "—",
-                                        "pub_dt":      pub_dt,
-                                        "source":      "NSE",
-                                        "source_type": "NSE",
-                                        "symbol":      sym,
+                                        "title": title,
+                                        "link": link or f"https://www.nseindia.com/get-quotes/equity?symbol={sym}",
+                                        "published": pub_str or "\u2014",
+                                        "pub_dt": pub_dt,
+                                        "source": "NSE", "source_type": "NSE", "symbol": sym,
                                     })
                         except Exception:
                             pass
                 except Exception:
                     pass
 
-                # Deduplicate and sort
                 seen, unique = set(), []
                 for item in all_items:
                     k = item["title"][:60].lower().strip()
                     if k not in seen:
-                        seen.add(k)
-                        unique.append(item)
+                        seen.add(k); unique.append(item)
                 unique.sort(key=lambda x: x.get("pub_dt") or datetime.min, reverse=True)
                 return unique
 
             SOURCE_COLORS = {
-                "Yahoo Finance":     "#0057b8",
-                "Mint":              "#e11d48",
-                "Business Standard": "#7c3aed",
-                "NSE":               "#059669",
+                "Yahoo Finance": "#0057b8", "Mint": "#e11d48",
+                "Business Standard": "#7c3aed", "NSE": "#059669",
             }
 
-            with st.spinner("Fetching news from all sources…"):
+            with st.spinner("Fetching news for all holdings\u2026"):
                 all_news = fetch_portfolio_news(tuple(df_h["Symbol"].tolist()))
 
             if not all_news:
-                st.info("No news found. Feeds may be temporarily unavailable — try refreshing.")
+                st.info("No news found. Feeds may be temporarily unavailable.")
             else:
-                st.caption(f"{len(all_news)} articles fetched")
-                cards_html = ""
-                for item in all_news[:150]:
-                    sym       = item.get("symbol","")
-                    src_type  = item.get("source_type","News")
-                    badge_clr = SOURCE_COLORS.get(src_type, "#64748b")
-                    sym_badge = (
-                        f'<span style="background:#e0f2fe;color:#0057b8;font-size:.62rem;'
-                        f'font-weight:700;padding:1px 6px;border-radius:4px;'
-                        f'font-family:JetBrains Mono,monospace;margin-right:5px;">{sym}</span>'
-                    ) if sym else ""
-                    src_badge = (
-                        f'<span style="background:{badge_clr}22;color:{badge_clr};'
-                        f'font-size:.62rem;font-weight:700;padding:1px 6px;border-radius:4px;'
-                        f'font-family:JetBrains Mono,monospace;">{src_type}</span>'
-                    )
-                    cards_html += f"""<div style="background:#fff;border:1px solid #e2e8f0;
-                        border-radius:8px;padding:10px 14px;margin-bottom:7px;
-                        box-shadow:0 1px 3px rgba(0,0,0,.03);">
-                      <div style="margin-bottom:4px;">{sym_badge}{src_badge}</div>
-                      <div style="font-size:.84rem;font-weight:600;line-height:1.4;color:#1e293b;">
-                        <a href="{item['link']}" target="_blank"
-                           style="color:#0057b8;text-decoration:none;">{item['title']}</a>
-                      </div>
-                      <div style="font-size:.67rem;color:#94a3b8;margin-top:4px;
-                                  font-family:JetBrains Mono,monospace;">
-                        🕐 {item['published']}
-                      </div>
-                    </div>"""
+                from collections import defaultdict
+                news_by_sym = defaultdict(list)
+                for item in all_news:
+                    s = item.get("symbol","")
+                    if s:
+                        news_by_sym[s].append(item)
 
-                news_html = """<!DOCTYPE html><html><head><meta charset="utf-8">
-<style>
-  *{box-sizing:border-box;margin:0;padding:0;}
-  html,body{background:#f4f6f9;font-family:Inter,sans-serif;}
-  .feed{height:780px;overflow-y:auto;padding:12px 14px;
-        scrollbar-width:thin;scrollbar-color:#cbd5e0 transparent;}
-  .feed::-webkit-scrollbar{width:5px;}
-  .feed::-webkit-scrollbar-thumb{background:#cbd5e0;border-radius:4px;}
-</style></head><body>
-<div class="feed">""" + cards_html + """</div></body></html>"""
+                syms_ordered = df_h["Symbol"].tolist()
+                PANEL_H = 400
 
-                st.components.v1.html(news_html, height=800, scrolling=False)
+                total_items = sum(len(news_by_sym.get(s,[])) for s in syms_ordered)
+                st.caption(f"{total_items} articles across {len(syms_ordered)} holdings \u00b7 Latest first per company")
+
+                for row_i in range(0, len(syms_ordered), 2):
+                    pair = syms_ordered[row_i:row_i+2]
+                    cols = st.columns(len(pair))
+                    if not isinstance(cols, list):
+                        cols = [cols]
+
+                    for col, sym in zip(cols, pair):
+                        with col:
+                            items  = news_by_sym.get(sym, [])
+                            sector = ""
+                            try:
+                                sector = df_h.loc[df_h["Symbol"]==sym, "Sector"].iloc[0]
+                            except Exception:
+                                pass
+
+                            if not items:
+                                cards = (
+                                    '<div style="padding:24px 16px;text-align:center;'
+                                    'color:#94a3b8;font-family:Inter,sans-serif;font-size:.8rem;">'
+                                    'No news found for this stock.</div>'
+                                )
+                            else:
+                                cards = ""
+                                for item in items:
+                                    src_type  = item.get("source_type","News")
+                                    badge_clr = SOURCE_COLORS.get(src_type, "#64748b")
+                                    cards += (
+                                        f'<div style="background:#fff;border:1px solid #e2e8f0;'
+                                        f'border-radius:7px;padding:9px 12px;margin-bottom:6px;'
+                                        f'box-shadow:0 1px 2px rgba(0,0,0,.03);">'
+                                        f'<div style="margin-bottom:3px;">'
+                                        f'<span style="background:{badge_clr}20;color:{badge_clr};'
+                                        f'font-size:.6rem;font-weight:700;padding:1px 5px;'
+                                        f'border-radius:3px;font-family:JetBrains Mono,monospace;">'
+                                        f'{src_type}</span></div>'
+                                        f'<div style="font-size:.82rem;font-weight:600;'
+                                        f'line-height:1.35;color:#1e293b;">'
+                                        f'<a href="{item["link"]}" target="_blank" '
+                                        f'style="color:#0057b8;text-decoration:none;">'
+                                        f'{item["title"]}</a></div>'
+                                        f'<div style="font-size:.65rem;color:#94a3b8;margin-top:3px;'
+                                        f'font-family:JetBrains Mono,monospace;">'
+                                        f'\U0001f550 {item["published"]}</div>'
+                                        f'</div>'
+                                    )
+
+                            panel_html = (
+                                f'<!DOCTYPE html><html><head><meta charset="utf-8">'
+                                f'<style>'
+                                f'*{{box-sizing:border-box;margin:0;padding:0;}}'
+                                f'html,body{{background:#f4f6f9;font-family:Inter,sans-serif;}}'
+                                f'.hdr{{position:sticky;top:0;z-index:10;background:#ffffff;'
+                                f'border-bottom:2px solid #e2e8f0;padding:8px 12px;}}'
+                                f'.sym{{font-size:.9rem;font-weight:700;color:#1e293b;'
+                                f'font-family:JetBrains Mono,monospace;}}'
+                                f'.meta{{display:flex;justify-content:space-between;'
+                                f'align-items:center;margin-top:2px;}}'
+                                f'.sector{{font-size:.65rem;color:#64748b;}}'
+                                f'.count{{font-size:.62rem;color:#94a3b8;'
+                                f'font-family:JetBrains Mono,monospace;}}'
+                                f'.body{{height:{PANEL_H-54}px;overflow-y:auto;padding:10px 12px;'
+                                f'scrollbar-width:thin;scrollbar-color:#cbd5e0 transparent;}}'
+                                f'.body::-webkit-scrollbar{{width:4px;}}'
+                                f'.body::-webkit-scrollbar-thumb{{background:#cbd5e0;border-radius:3px;}}'
+                                f'</style></head><body>'
+                                f'<div class="hdr">'
+                                f'<div class="sym">{sym}</div>'
+                                f'<div class="meta">'
+                                f'<span class="sector">{sector}</span>'
+                                f'<span class="count">{len(items)} articles</span>'
+                                f'</div></div>'
+                                f'<div class="body">{cards}</div>'
+                                f'</body></html>'
+                            )
+                            st.components.v1.html(panel_html, height=PANEL_H, scrolling=False)
 
     st.markdown("---")
     st.markdown(
         '<div style="font-size:.72rem;color:#94a3b8;font-family:JetBrains Mono,monospace;">'
-        "💼 Holdings XLSX from Zerodha Console → Portfolio → Holdings → Download · "
-        "Live LTP via yfinance · News: Yahoo Finance, Mint, Business Standard, NSE · "
-        "Signals: automated screening only — not financial advice."
+        "\U0001f4bc Holdings XLSX from Zerodha Console \u2192 Portfolio \u2192 Holdings \u2192 Download \u00b7 "
+        "Live LTP via yfinance \u00b7 News: Yahoo Finance, Mint, Business Standard, NSE \u00b7 "
+        "Signals: technical + fundamental screening \u2014 not financial advice."
         '</div>',
         unsafe_allow_html=True
     )
-    st.markdown(
-        '<div style="font-size:.72rem;color:#94a3b8;font-family:JetBrains Mono,monospace;">'
-        "💼 Upload Zerodha Holdings XLSX from Console → Portfolio → Holdings → Download · "
-        "Live LTP via yfinance · Sectors from Zerodha file · Refreshes on re-upload."
-        "</div>",
-        unsafe_allow_html=True
-    )
+
 
 
 # =============================================================================
