@@ -1029,98 +1029,141 @@ with tab_tv:
 
 
 # =============================================================================
-# TAB 7 — Telegram Channels
-# Uses t.me/s/CHANNEL — Telegram's own public web view.
-# No API key, no auth, no rate limits. Works inside any iframe.
-# TO ADD A CHANNEL: add a new tuple to TELEGRAM_CHANNELS below.
+# TAB 7 — Telegram Channels (via RSSHub → feedparser → news cards)
+# RSSHub converts any public Telegram channel into a standard RSS feed.
+# URL pattern: https://rsshub.app/telegram/channel/CHANNEL_USERNAME
+# No API key, no auth, no iframes, no rate limits.
+#
+# ┌─────────────────────────────────────────────────────────────────┐
+# │  TO ADD A NEW TELEGRAM CHANNEL:                                 │
+# │  1. Find the channel's username (the part after t.me/)          │
+# │  2. Add a new tuple to TELEGRAM_CHANNELS below in this format:  │
+# │     ("Display Name", "username", "short description")           │
+# │  3. Save the file and push to GitHub — done.                    │
+# └─────────────────────────────────────────────────────────────────┘
 # =============================================================================
 with tab_twitter:
     st.markdown("#### 📬 Telegram — Market Channels")
     st.caption(
-        "Live posts from public Telegram channels, rendered via Telegram's own web view. "
-        "**To add a channel:** edit `app.py` and add a new entry to `TELEGRAM_CHANNELS`."
+        "Posts fetched via **RSSHub** (rsshub.app) — a free open-source RSS bridge for Telegram. "
+        "Refreshes every 10 min. To add a channel, edit `TELEGRAM_CHANNELS` in `app.py`."
     )
 
-    # ── Channel list ─────────────────────────────────────────────────────────
-    # Format: ("Display Name", "telegram_username", "short description")
+    # ══════════════════════════════════════════════════════════════
+    # ADD / REMOVE TELEGRAM CHANNELS HERE
+    # Format: ("Display Name", "telegram_username", "description")
     TELEGRAM_CHANNELS = [
-        ("RedboxGlobal India",                  "indiaredboxglobal",  "Real-time market news & calls"),
-        ("Beat The Street News",                "Beatthestreetnews",  "Latest share market news"),
-        ("Beat The Street Equity Research",     "btsreports",         "Research reports & books"),
-        # Add more channels below:
-        # ("Moneycontrol",   "moneycontrolcom",   "Business & markets news"),
+        ("RedboxGlobal India",               "indiaredboxglobal", "Real-time market news & calls"),
+        ("Beat The Street News",             "Beatthestreetnews", "Latest share market news"),
+        ("Beat The Street Equity Research",  "btsreports",        "Research reports & books"),
+        # ── Add more channels below this line ─────────────────────
+        # ("Zerodha Varsity",   "zerodhaonline",     "Market education & insights"),
+        # ("Moneycontrol News", "moneycontrolcom",   "Business & markets coverage"),
+        # ("NSE India",         "NSEIndia",          "Official NSE announcements"),
     ]
-    # ─────────────────────────────────────────────────────────────────────────
+    # ══════════════════════════════════════════════════════════════
+
+    @st.cache_data(ttl=600)
+    def fetch_telegram_rss(channel_username):
+        """Fetch a Telegram channel's posts via RSSHub's free RSS bridge."""
+        url = f"https://rsshub.app/telegram/channel/{channel_username}"
+        try:
+            feed = feedparser.parse(url)
+            items = []
+            for entry in feed.entries[:20]:
+                pub = entry.get("published", entry.get("updated", ""))
+                try:
+                    from email.utils import parsedate_to_datetime
+                    pub_str = parsedate_to_datetime(pub).strftime("%d %b %Y  %H:%M")
+                except Exception:
+                    pub_str = pub[:16] if pub else "—"
+
+                # Clean up the summary — strip HTML tags for plain preview
+                import re as _re
+                raw_summary = entry.get("summary", entry.get("description", ""))
+                clean_summary = _re.sub(r"<[^>]+>", " ", raw_summary).strip()
+                clean_summary = _re.sub(r"\s+", " ", clean_summary)[:280]
+
+                items.append({
+                    "title":     entry.get("title", clean_summary[:80] or "—"),
+                    "summary":   clean_summary,
+                    "link":      entry.get("link", f"https://t.me/{channel_username}"),
+                    "published": pub_str,
+                })
+            return items, None
+        except Exception as e:
+            return [], str(e)
 
     if not TELEGRAM_CHANNELS:
-        st.info("No channels configured. Add usernames to `TELEGRAM_CHANNELS` in `app.py`.")
+        st.info("No channels configured. Add entries to `TELEGRAM_CHANNELS` in `app.py`.")
     else:
-        COLS_PER_ROW = min(len(TELEGRAM_CHANNELS), 3)
-        rows = [TELEGRAM_CHANNELS[i:i+COLS_PER_ROW]
-                for i in range(0, len(TELEGRAM_CHANNELS), COLS_PER_ROW)]
+        # ── Channel selector tabs ─────────────────────────────────
+        ch_labels = [name for name, _, _ in TELEGRAM_CHANNELS]
+        ch_tabs   = st.tabs(ch_labels)
 
-        for row in rows:
-            cols = st.columns(len(row))
-            if not isinstance(cols, list):
-                cols = [cols]
-            for col, (display_name, handle, desc) in zip(cols, row):
-                with col:
-                    st.markdown(f"**{display_name}**")
-                    st.caption(f"@{handle} · {desc}")
+        for ch_tab, (display_name, handle, desc) in zip(ch_tabs, TELEGRAM_CHANNELS):
+            with ch_tab:
+                tg_col1, tg_col2 = st.columns([5, 1])
+                with tg_col1:
+                    st.markdown(f"**{display_name}** &nbsp;·&nbsp; `@{handle}`")
+                    st.caption(desc)
+                with tg_col2:
+                    tg_link = f"https://t.me/{handle}"
+                    st.markdown(
+                        f'<a href="{tg_link}" target="_blank" '
+                        f'style="display:inline-block;background:#0057b8;color:#fff;'
+                        f'padding:5px 14px;border-radius:6px;font-size:.75rem;'
+                        f'font-weight:600;text-decoration:none;font-family:Inter,sans-serif;">'
+                        f'Open on Telegram ↗</a>',
+                        unsafe_allow_html=True
+                    )
 
-                    # t.me/s/USERNAME is Telegram's official public web viewer
-                    # It needs no cookies/auth and renders inside iframes cleanly.
-                    tg_embed = f"""<!DOCTYPE html>
-<html><head><meta charset="utf-8">
-<style>
-  html, body {{ margin:0; padding:0; background:#f4f6f9; }}
-  .wrap {{
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    overflow: hidden;
-    background: #ffffff;
-    box-shadow: 0 1px 4px rgba(0,0,0,.06);
-    height: 640px;
-  }}
-  iframe {{ width:100%; height:640px; border:none; display:block; border-radius:12px; }}
-  .fallback {{
-    padding: 40px 20px; text-align: center;
-    font-family: Inter, sans-serif; color: #64748b;
-  }}
-  .fallback a {{
-    display: inline-block; margin-top: 12px;
-    background: #0057b8; color: #fff;
-    padding: 8px 20px; border-radius: 6px;
-    text-decoration: none; font-size: .85rem; font-weight: 600;
-  }}
-</style>
-</head>
-<body>
-<div class="wrap">
-  <iframe
-    src="https://t.me/s/{handle}"
-    sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-    referrerpolicy="no-referrer"
-    loading="lazy"
-    scrolling="yes">
-    <div class="fallback">
-      <p>Could not load channel preview.</p>
-      <a href="https://t.me/{handle}" target="_blank">Open @{handle} on Telegram ↗</a>
-    </div>
-  </iframe>
-</div>
-</body></html>"""
-                    st.components.v1.html(tg_embed, height=660, scrolling=False)
+                st.markdown("---")
 
-        st.markdown("---")
-        st.markdown(
-            '<div style="font-size:.72rem;color:#94a3b8;font-family:JetBrains Mono,monospace;">'
-            "📬 Telegram channel previews via t.me public web view. "
-            "If a channel shows blank, it may be private or have restricted web previews. "
-            "Click the fallback link to open it directly in Telegram."
-            "</div>",
-            unsafe_allow_html=True
-        )
+                with st.spinner(f"Fetching posts from @{handle}…"):
+                    posts, err = fetch_telegram_rss(handle)
+
+                if err:
+                    st.warning(
+                        f"⚠️ Could not fetch @{handle} via RSSHub. "
+                        f"This usually means RSSHub is temporarily overloaded — try refreshing in a minute. "
+                        f"Error: `{err}`"
+                    )
+                elif not posts:
+                    st.info(
+                        f"No posts found for @{handle}. "
+                        f"The channel may be private, empty, or RSSHub may not have indexed it yet."
+                    )
+                else:
+                    st.caption(f"Showing {len(posts)} most recent posts · Refreshes every 10 min")
+                    for post in posts:
+                        # Truncate title if it's just a repeat of summary
+                        title_display = post["title"] if len(post["title"]) < 120 else post["title"][:117] + "…"
+                        summary_display = post["summary"] if post["summary"] and post["summary"] != post["title"] else ""
+
+                        st.markdown(
+                            f"""<div class="news-card">
+                              <div class="news-headline">
+                                <a href="{post['link']}" target="_blank"
+                                   style="color:#0057b8;text-decoration:none;">
+                                  {title_display}
+                                </a>
+                              </div>
+                              {'<div style="font-size:.8rem;color:#475569;margin-top:4px;line-height:1.5;">' + summary_display + '</div>' if summary_display else ''}
+                              <div class="news-meta">📬 @{handle} &nbsp;·&nbsp; 🕐 {post['published']}</div>
+                            </div>""",
+                            unsafe_allow_html=True
+                        )
+
+    st.markdown("---")
+    st.markdown(
+        '<div style="font-size:.72rem;color:#94a3b8;font-family:JetBrains Mono,monospace;">'
+        "📬 Posts fetched via rsshub.app · Free open-source RSS bridge · "
+        "RSSHub only works for public Telegram channels. "
+        "Data refreshes every 10 minutes."
+        "</div>",
+        unsafe_allow_html=True
+    )
 
 
 # =============================================================================
