@@ -1,10 +1,9 @@
 # =============================================================================
-# INVESTMENT DASHBOARD — Bloomberg Terminal Aesthetic
+# INVESTMENT DASHBOARD — Light Mode + Live Sticky Ticker Bar
 # Author: Generated for personal use
 # =============================================================================
 # FUTURE ENHANCEMENTS (not yet built):
 #   - Fear & Greed Gauge: Map India VIX to 0-100 sentiment gauge
-#   - USD/INR Currency Tracker: Add USDINR=X to sidebar ticker
 #   - Portfolio CSV Upload: Auto-filter news & technicals to holdings
 #   - Alerts: Visual/audio alerts when RSI crosses 70/30 or price crosses 200 EMA
 # =============================================================================
@@ -16,7 +15,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import feedparser
-from datetime import datetime, timedelta
+from datetime import datetime
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -38,115 +37,195 @@ st.set_page_config(
 )
 
 # =============================================================================
-# GLOBAL CSS — Dark Bloomberg-style theme
+# PLOTLY THEME — Light
+# =============================================================================
+PLOTLY_TEMPLATE  = "plotly_white"
+PLOTLY_PAPER_BG  = "#f8f9fb"
+PLOTLY_PLOT_BG   = "#ffffff"
+PLOTLY_GRID      = "#e8ecf0"
+GREEN            = "#16a34a"
+RED              = "#dc2626"
+BLUE             = "#0057b8"
+YELLOW           = "#d97706"
+
+# =============================================================================
+# GLOBAL CSS — Professional Light Theme
 # =============================================================================
 st.markdown("""
 <style>
-    /* ── Base ── */
-    .stApp { background-color: #0a0a0f; color: #e0e0e0; }
-    section[data-testid="stSidebar"] { background-color: #0d0d14; border-right: 1px solid #1e2030; }
-    
-    /* ── Fonts ── */
     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap');
-    body, .stApp { font-family: 'Inter', sans-serif; }
-    .mono { font-family: 'JetBrains Mono', monospace !important; }
+
+    /* ── Base ── */
+    .stApp { background-color: #f4f6f9; color: #1a202c; font-family: 'Inter', sans-serif; }
+    section[data-testid="stSidebar"] { background-color: #ffffff; border-right: 1px solid #e2e8f0; }
+    [data-testid="stHeader"] { background-color: #ffffff; border-bottom: 1px solid #e2e8f0; }
+
+    /* ── Push main content below the sticky ticker bar ── */
+    [data-testid="stAppViewContainer"] > .main > .block-container {
+        padding-top: 70px !important;
+    }
+
+    /* ── Sticky ticker bar ── */
+    #ticker-bar-wrapper {
+        position: fixed;
+        top: 58px;
+        left: 0;
+        right: 0;
+        z-index: 998;
+        background: #ffffff;
+        border-bottom: 2px solid #e2e8f0;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+        padding: 0 16px;
+        height: 46px;
+        display: flex;
+        align-items: center;
+        gap: 0;
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+    #ticker-bar-wrapper::-webkit-scrollbar { display: none; }
+
+    .ticker-live-dot {
+        width: 7px; height: 7px; border-radius: 50%; background: #16a34a;
+        animation: pulse 1.6s infinite;
+        flex-shrink: 0;
+        margin-right: 10px;
+    }
+    @keyframes pulse {
+        0%,100% { opacity: 1; transform: scale(1); }
+        50%      { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    .ticker-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 0 18px;
+        border-right: 1px solid #e8ecf0;
+        line-height: 1.2;
+        flex-shrink: 0;
+        cursor: default;
+    }
+    .ticker-item:last-child { border-right: none; }
+    .ticker-name {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.58rem;
+        font-weight: 700;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .ticker-price {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #1e293b;
+    }
+    .ticker-chg {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.65rem;
+        font-weight: 600;
+    }
+    .ticker-chg.up   { color: #16a34a; }
+    .ticker-chg.down { color: #dc2626; }
+    .ticker-chg.flat { color: #64748b; }
 
     /* ── Metric cards ── */
     [data-testid="metric-container"] {
-        background: #0f0f1a;
-        border: 1px solid #1e2030;
-        border-radius: 6px;
-        padding: 8px 12px;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 10px 14px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
-    [data-testid="stMetricLabel"] { font-size: 0.65rem !important; color: #8899aa !important; text-transform: uppercase; letter-spacing: 0.08em; }
-    [data-testid="stMetricValue"] { font-family: 'JetBrains Mono', monospace !important; font-size: 1.1rem !important; color: #e8ecf0 !important; }
-    [data-testid="stMetricDelta"] { font-family: 'JetBrains Mono', monospace !important; font-size: 0.75rem !important; }
+    [data-testid="stMetricLabel"] { font-size: 0.65rem !important; color: #64748b !important; text-transform: uppercase; letter-spacing: 0.08em; }
+    [data-testid="stMetricValue"] { font-family: 'JetBrains Mono', monospace !important; font-size: 1.05rem !important; color: #1e293b !important; }
+    [data-testid="stMetricDelta"] { font-family: 'JetBrains Mono', monospace !important; font-size: 0.72rem !important; }
 
     /* ── Section headers ── */
     .section-header {
         font-family: 'JetBrains Mono', monospace;
-        font-size: 0.6rem;
-        letter-spacing: 0.15em;
-        color: #4a5568;
+        font-size: 0.58rem;
+        letter-spacing: 0.14em;
+        color: #94a3b8;
         text-transform: uppercase;
-        border-bottom: 1px solid #1a1f2e;
+        border-bottom: 1px solid #e2e8f0;
         padding-bottom: 4px;
         margin: 14px 0 8px 0;
     }
-    
+
     /* ── Signal boxes ── */
     .signal-box {
-        background: #0f0f1a;
-        border-left: 3px solid #00b4d8;
-        border-radius: 0 6px 6px 0;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-left: 3px solid #0057b8;
+        border-radius: 0 8px 8px 0;
         padding: 10px 14px;
         margin: 6px 0;
         font-family: 'JetBrains Mono', monospace;
-        font-size: 0.82rem;
-        color: #c9d6e3;
+        font-size: 0.8rem;
+        color: #334155;
     }
-    .signal-bullish { border-left-color: #00c853; }
-    .signal-bearish { border-left-color: #ff1744; }
-    .signal-neutral { border-left-color: #ffd600; }
-    
+    .signal-bullish { border-left-color: #16a34a; background: #f0fdf4; }
+    .signal-bearish { border-left-color: #dc2626; background: #fff5f5; }
+    .signal-neutral { border-left-color: #d97706; background: #fffbeb; }
+
     /* ── News cards ── */
     .news-card {
-        background: #0f0f1a;
-        border: 1px solid #1e2030;
-        border-radius: 6px;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
         padding: 10px 14px;
         margin: 5px 0;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     }
-    .news-headline { font-weight: 600; font-size: 0.88rem; color: #cbd5e0; }
-    .news-meta { font-size: 0.72rem; color: #4a5568; margin-top: 3px; font-family: 'JetBrains Mono', monospace; }
+    .news-headline { font-weight: 600; font-size: 0.87rem; color: #1e293b; }
+    .news-meta { font-size: 0.7rem; color: #94a3b8; margin-top: 3px; font-family: 'JetBrains Mono', monospace; }
 
     /* ── Tabs ── */
-    .stTabs [data-baseweb="tab-list"] { background: #0d0d14; gap: 4px; }
-    .stTabs [data-baseweb="tab"] { background: #0f0f1a; border: 1px solid #1e2030; border-radius: 4px; color: #7a8a9a; font-size: 0.8rem; }
-    .stTabs [aria-selected="true"] { background: #1a1f2e !important; color: #00b4d8 !important; border-color: #00b4d8 !important; }
+    .stTabs [data-baseweb="tab-list"] { background: #f4f6f9; gap: 4px; border-radius: 8px; padding: 4px; }
+    .stTabs [data-baseweb="tab"] { background: transparent; border: none; border-radius: 6px; color: #64748b; font-size: 0.82rem; font-family: 'Inter', sans-serif; }
+    .stTabs [aria-selected="true"] { background: #ffffff !important; color: #0057b8 !important; font-weight: 600; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
 
     /* ── Buttons ── */
-    .stButton button { background: #1a1f2e; border: 1px solid #2a3040; color: #8899aa; font-size: 0.78rem; border-radius: 4px; }
-    .stButton button:hover { background: #1e2535; border-color: #00b4d8; color: #00b4d8; }
+    .stButton button { background: #ffffff; border: 1px solid #e2e8f0; color: #475569; font-size: 0.78rem; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+    .stButton button:hover { background: #f1f5f9; border-color: #0057b8; color: #0057b8; }
 
     /* ── Table ── */
-    .stDataFrame { border: 1px solid #1e2030; border-radius: 6px; }
+    .stDataFrame { border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff; }
 
-    /* ── Selectbox / Input ── */
-    .stSelectbox > div, .stTextInput > div > div { background: #0f0f1a !important; border-color: #1e2030 !important; color: #e0e0e0 !important; font-family: 'JetBrains Mono', monospace; }
+    /* ── Inputs / Selectbox ── */
+    .stSelectbox > div > div, .stTextInput > div > div { background: #ffffff !important; border-color: #e2e8f0 !important; color: #1e293b !important; }
 
     /* ── Dashboard title ── */
     .dash-title {
         font-family: 'JetBrains Mono', monospace;
-        font-size: 1.5rem;
+        font-size: 1.4rem;
         font-weight: 700;
-        color: #00b4d8;
-        letter-spacing: 0.1em;
+        color: #0057b8;
+        letter-spacing: 0.08em;
     }
     .dash-subtitle {
         font-family: 'JetBrains Mono', monospace;
-        font-size: 0.65rem;
-        color: #4a5568;
+        font-size: 0.62rem;
+        color: #94a3b8;
         letter-spacing: 0.12em;
         text-transform: uppercase;
     }
 
-    /* ── Gauge border ── */
-    .gauge-container { border: 1px solid #1e2030; border-radius: 8px; background: #0f0f1a; padding: 4px; }
-    
+    /* ── Misc ── */
     div[data-testid="stHorizontalBlock"] { gap: 12px; }
-    hr { border-color: #1e2030; }
+    hr { border-color: #e2e8f0; }
+    .stMarkdown p { color: #334155; }
+    .stCaption { color: #94a3b8 !important; }
+
+    /* ── Expander ── */
+    [data-testid="stExpander"] { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; }
+
+    /* ── Info/Warning/Success boxes ── */
+    [data-testid="stAlert"] { border-radius: 8px; }
 </style>
 """, unsafe_allow_html=True)
-
-PLOTLY_TEMPLATE = "plotly_dark"
-PLOTLY_PAPER_BG = "#0a0a0f"
-PLOTLY_PLOT_BG = "#0f0f1a"
-PLOTLY_GRID = "#1a1f2e"
-GREEN = "#00c853"
-RED = "#ff1744"
-BLUE = "#00b4d8"
-YELLOW = "#ffd600"
 
 # =============================================================================
 # HELPER FUNCTIONS
@@ -162,15 +241,10 @@ def fmt_pct(val):
         return None
     return f"{val:+.2f}%"
 
-def color_delta(val):
-    if val is None or (isinstance(val, float) and np.isnan(val)):
-        return None
-    return "normal" if val >= 0 else "inverse"
-
 
 @st.cache_data(ttl=60)
 def fetch_ticker_snapshot(symbol):
-    """Fetch current price and daily change for a single ticker."""
+    """Fetch current price and daily % change for a single ticker."""
     try:
         t = yf.Ticker(symbol)
         info = t.fast_info
@@ -185,6 +259,33 @@ def fetch_ticker_snapshot(symbol):
         return None, None
 
 
+@st.cache_data(ttl=60)
+def fetch_ticker_bar_batch():
+    """
+    Batch-fetch all 10 ticker-bar symbols in one call for efficiency.
+    MCX Gold/Silver/Copper: yfinance does not support MCX exchange directly.
+    GC=F (COMEX Gold), SI=F (Silver), HG=F (Copper) are the closest
+    international proxies and track MCX prices very closely.
+    """
+    TICKER_BAR_SYMBOLS = {
+        "NIFTY 50":   "^NSEI",
+        "BANK NIFTY": "^NSEBANK",
+        "GIFT NIFTY": "GIFTTY=F",
+        "SPX":        "^GSPC",
+        "BTC":        "BTC-USD",
+        "GOLD MCX":   "GC=F",       # COMEX proxy — tracks MCX gold closely
+        "SILVER MCX": "SI=F",       # COMEX proxy
+        "COPPER MCX": "HG=F",       # COMEX proxy
+        "USD/INR":    "USDINR=X",
+        "EUR/USD":    "EURUSD=X",
+    }
+    results = {}
+    for label, sym in TICKER_BAR_SYMBOLS.items():
+        price, chg = fetch_ticker_snapshot(sym)
+        results[label] = {"price": price, "chg": chg, "sym": sym}
+    return results
+
+
 @st.cache_data(ttl=300)
 def fetch_ohlcv(symbol, period="1y", interval="1d"):
     """Fetch OHLCV data for a given symbol."""
@@ -192,11 +293,10 @@ def fetch_ohlcv(symbol, period="1y", interval="1d"):
         df = yf.download(symbol, period=period, interval=interval, progress=False, auto_adjust=True)
         if df.empty:
             return None
-        # Flatten MultiIndex columns if present
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
         return df
-    except Exception as e:
+    except Exception:
         return None
 
 
@@ -222,9 +322,7 @@ def calc_macd(series, fast=12, slow=26, signal=9):
 def calc_bollinger(series, period=20, std_dev=2):
     sma = series.rolling(period).mean()
     std = series.rolling(period).std()
-    upper = sma + std_dev * std
-    lower = sma - std_dev * std
-    return upper, sma, lower
+    return sma + std_dev * std, sma, sma - std_dev * std
 
 
 @st.cache_data(ttl=3600)
@@ -250,12 +348,10 @@ def fetch_nifty50_breadth():
             try:
                 s = close[t].dropna()
                 if len(s) < 50:
-                    status = "Insufficient data"
-                    above = None
+                    status, above = "Insufficient data", None
                 else:
                     sma50 = s.rolling(50).mean().iloc[-1]
-                    last = s.iloc[-1]
-                    above = last > sma50
+                    above = bool(s.iloc[-1] > sma50)
                     status = "Above 50 SMA" if above else "Below 50 SMA"
                 results.append({"Ticker": t.replace(".NS", ""), "Status": status, "Above50SMA": above})
             except Exception:
@@ -271,7 +367,7 @@ def fetch_nifty50_breadth():
 
 @st.cache_data(ttl=600)
 def fetch_rss(url):
-    """Fetch and parse an RSS feed, return list of dicts."""
+    """Fetch and parse an RSS feed."""
     try:
         feed = feedparser.parse(url)
         items = []
@@ -279,8 +375,7 @@ def fetch_rss(url):
             pub = entry.get("published", entry.get("updated", ""))
             try:
                 from email.utils import parsedate_to_datetime
-                dt = parsedate_to_datetime(pub)
-                pub_str = dt.strftime("%d %b %Y  %H:%M")
+                pub_str = parsedate_to_datetime(pub).strftime("%d %b %Y  %H:%M")
             except Exception:
                 pub_str = pub[:20] if pub else "–"
             items.append({
@@ -301,72 +396,99 @@ def plotly_base_layout(height=400):
         plot_bgcolor=PLOTLY_PLOT_BG,
         height=height,
         margin=dict(l=10, r=10, t=30, b=10),
-        font=dict(family="JetBrains Mono, monospace", size=10, color="#8899aa"),
+        font=dict(family="JetBrains Mono, monospace", size=10, color="#475569"),
         xaxis=dict(gridcolor=PLOTLY_GRID, showgrid=True, zeroline=False),
         yaxis=dict(gridcolor=PLOTLY_GRID, showgrid=True, zeroline=False),
-        legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(size=9)),
+        legend=dict(bgcolor="rgba(255,255,255,0.8)", font=dict(size=9), bordercolor="#e2e8f0", borderwidth=1),
         hovermode="x unified",
     )
 
 
 # =============================================================================
-# SIDEBAR — Market Ticker + Controls
+# STICKY TICKER BAR
 # =============================================================================
+ticker_data = fetch_ticker_bar_batch()
 
+ticker_items_html = '<div class="ticker-live-dot"></div>'
+for label, data in ticker_data.items():
+    price  = data["price"]
+    chg    = data["chg"]
+
+    # Format price — use more decimals for FX pairs
+    if price is None or (isinstance(price, float) and np.isnan(price)):
+        price_str = "—"
+    elif label in ("EUR/USD",):
+        price_str = f"{price:,.4f}"
+    elif label in ("USD/INR",):
+        price_str = f"{price:,.2f}"
+    elif label in ("BTC",):
+        price_str = f"{price:,.0f}"
+    else:
+        price_str = f"{price:,.2f}"
+
+    # Format change
+    if chg is None or (isinstance(chg, float) and np.isnan(chg)):
+        chg_str, chg_cls = "—", "flat"
+    elif chg > 0:
+        chg_str, chg_cls = f"+{chg:.2f}%", "up"
+    elif chg < 0:
+        chg_str, chg_cls = f"{chg:.2f}%", "down"
+    else:
+        chg_str, chg_cls = "0.00%", "flat"
+
+    ticker_items_html += f"""
+    <div class="ticker-item">
+        <span class="ticker-name">{label}</span>
+        <span class="ticker-price">{price_str}</span>
+        <span class="ticker-chg {chg_cls}">{chg_str}</span>
+    </div>"""
+
+st.markdown(
+    f'<div id="ticker-bar-wrapper">{ticker_items_html}</div>',
+    unsafe_allow_html=True,
+)
+
+# =============================================================================
+# SIDEBAR — Controls + Mini Market Ticker
+# =============================================================================
 with st.sidebar:
     st.markdown('<div class="dash-title">📊 MKTS</div>', unsafe_allow_html=True)
-    st.markdown('<div class="dash-subtitle">Live Market Intelligence</div>', unsafe_allow_html=True)
+    st.markdown('<div class="dash-subtitle">Investment Command Center</div>', unsafe_allow_html=True)
     st.markdown("---")
 
     # ── Auto Refresh ──────────────────────────────────────────────────────────
     st.markdown('<div class="section-header">⟳ Auto Refresh</div>', unsafe_allow_html=True)
     refresh_map = {"Off": 0, "1 min": 60_000, "5 min": 300_000, "15 min": 900_000}
     refresh_sel = st.selectbox("Interval", list(refresh_map.keys()), index=0, label_visibility="collapsed")
-    
+
     if AUTOREFRESH_AVAILABLE and refresh_map[refresh_sel] > 0:
         st_autorefresh(interval=refresh_map[refresh_sel], key="autorefresh")
     elif not AUTOREFRESH_AVAILABLE and refresh_map[refresh_sel] > 0:
         st.caption("⚠️ Install `streamlit-autorefresh` for auto-refresh.")
 
-    col_r1, col_r2 = st.columns(2)
+    col_r1, _ = st.columns(2)
     with col_r1:
-        manual_refresh = st.button("↺ Refresh", use_container_width=True)
-    if manual_refresh:
-        st.cache_data.clear()
-        st.rerun()
+        if st.button("↺ Refresh", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
 
     st.markdown("---")
 
     # ── Indian Indices ─────────────────────────────────────────────────────────
     st.markdown('<div class="section-header">🇮🇳 Indian Indices</div>', unsafe_allow_html=True)
-    indian_tickers = {
-        "Nifty 50": "^NSEI",
-        "Bank Nifty": "^NSEBANK",
-        "GIFT Nifty": "GIFTTY=F",
-        "India VIX": "^INDIAVIX",
-    }
-    for label, sym in indian_tickers.items():
+    for label, sym in {"Nifty 50": "^NSEI", "Bank Nifty": "^NSEBANK", "GIFT Nifty": "GIFTTY=F", "India VIX": "^INDIAVIX"}.items():
         price, chg = fetch_ticker_snapshot(sym)
         st.metric(label=label, value=fmt_price(price), delta=fmt_pct(chg))
 
     # ── Commodities ────────────────────────────────────────────────────────────
     st.markdown('<div class="section-header">🪙 Commodities</div>', unsafe_allow_html=True)
-    commodity_tickers = {
-        "Gold ($/oz)": "GC=F",
-        "Silver ($/oz)": "SI=F",
-        "Brent Crude": "BZ=F",
-    }
-    for label, sym in commodity_tickers.items():
+    for label, sym in {"Gold ($/oz)": "GC=F", "Silver ($/oz)": "SI=F", "Brent Crude": "BZ=F"}.items():
         price, chg = fetch_ticker_snapshot(sym)
         st.metric(label=label, value=fmt_price(price), delta=fmt_pct(chg))
 
-    # ── US Indices ─────────────────────────────────────────────────────────────
+    # ── US Markets ─────────────────────────────────────────────────────────────
     st.markdown('<div class="section-header">🇺🇸 US Markets</div>', unsafe_allow_html=True)
-    us_tickers = {
-        "S&P 500": "^GSPC",
-        "Nasdaq 100": "^IXIC",
-    }
-    for label, sym in us_tickers.items():
+    for label, sym in {"S&P 500": "^GSPC", "Nasdaq 100": "^IXIC"}.items():
         price, chg = fetch_ticker_snapshot(sym)
         st.metric(label=label, value=fmt_price(price), delta=fmt_pct(chg))
 
@@ -374,13 +496,12 @@ with st.sidebar:
 
     # ── Portfolio News RSS inputs ──────────────────────────────────────────────
     st.markdown('<div class="section-header">📰 My News Sources</div>', unsafe_allow_html=True)
-    st.caption("Paste your personal RSS feed URLs below. (e.g., your Economist subscriber feed)")
+    st.caption("Paste your personal RSS feed URLs below.")
     with st.expander("ℹ️ How to find RSS URLs"):
         st.caption(
-            "Most publications hide RSS behind their settings. "
-            "Search: **[Publication name] RSS feed URL**. "
+            "Search **[Publication name] RSS feed URL**. "
             "For The Economist, log in → Account → RSS feeds. "
-            "The URL must end in `.rss`, `.xml`, or similar."
+            "URL must end in `.rss` or `.xml`."
         )
     user_rss_1 = st.text_input("Custom Feed #1 URL", value="", placeholder="https://...")
     user_rss_2 = st.text_input("Custom Feed #2 URL", value="", placeholder="https://...")
@@ -394,9 +515,8 @@ with st.sidebar:
 # =============================================================================
 # MAIN CONTENT AREA
 # =============================================================================
-
 st.markdown('<div class="dash-title">INVESTMENT COMMAND CENTER</div>', unsafe_allow_html=True)
-st.markdown('<div class="dash-subtitle">Bloomberg-style · Real-time · Professional Grade</div>', unsafe_allow_html=True)
+st.markdown('<div class="dash-subtitle">Real-time · Professional Grade · India & Global Markets</div>', unsafe_allow_html=True)
 st.markdown("---")
 
 # =============================================================================
@@ -412,15 +532,14 @@ tab_charts, tab_technicals, tab_breadth, tab_news, tab_calendar, tab_tv = st.tab
 ])
 
 # =============================================================================
-# TAB 1 — TradingView Live Chart (moved here for primacy)
+# TAB 1 — TradingView Live Chart
 # =============================================================================
 with tab_charts:
     st.markdown("#### TradingView Live Chart")
     tv_col1, tv_col2 = st.columns([2, 1])
     with tv_col1:
         tv_symbol = st.text_input(
-            "Symbol (TradingView format)",
-            value="NSE:NIFTY",
+            "Symbol (TradingView format)", value="NSE:NIFTY",
             help="Examples: NSE:NIFTY, NSE:RELIANCE, NASDAQ:AAPL, NYSE:TSLA",
             key="tv_sym"
         )
@@ -433,23 +552,15 @@ with tab_charts:
       <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
       <script type="text/javascript">
         new TradingView.widget({{
-          "width": "100%",
-          "height": 580,
-          "symbol": "{tv_symbol}",
-          "interval": "{tv_interval}",
-          "timezone": "Asia/Kolkata",
-          "theme": "dark",
-          "style": "1",
-          "locale": "en",
-          "toolbar_bg": "#0d0d14",
-          "enable_publishing": false,
-          "allow_symbol_change": true,
-          "hide_side_toolbar": false,
-          "container_id": "tradingview_chart"
+          "width": "100%", "height": 580,
+          "symbol": "{tv_symbol}", "interval": "{tv_interval}",
+          "timezone": "Asia/Kolkata", "theme": "light", "style": "1",
+          "locale": "en", "toolbar_bg": "#f8f9fb",
+          "enable_publishing": false, "allow_symbol_change": true,
+          "hide_side_toolbar": false, "container_id": "tradingview_chart"
         }});
       </script>
-    </div>
-    """
+    </div>"""
     st.components.v1.html(tv_html, height=600)
 
 
@@ -475,26 +586,22 @@ with tab_technicals:
             st.warning(f"⚠️ Could not fetch data for `{tech_sym}`. Check the symbol and try again.")
         else:
             close = df["Close"].squeeze()
-            high = df["High"].squeeze()
-            low = df["Low"].squeeze()
+            high  = df["High"].squeeze()
+            low   = df["Low"].squeeze()
             open_ = df["Open"].squeeze()
 
-            # Calculate indicators
-            rsi = calc_rsi(close)
+            rsi                         = calc_rsi(close)
             macd_line, signal_line, histogram = calc_macd(close)
-            ema200 = close.ewm(span=200, adjust=False).mean()
-            bb_upper, bb_mid, bb_lower = calc_bollinger(close)
+            ema200                      = close.ewm(span=200, adjust=False).mean()
+            bb_upper, bb_mid, bb_lower  = calc_bollinger(close)
 
             # ── Chart ─────────────────────────────────────────────────────────
             fig = make_subplots(
-                rows=3, cols=1,
-                shared_xaxes=True,
-                row_heights=[0.55, 0.25, 0.20],
-                vertical_spacing=0.02,
+                rows=3, cols=1, shared_xaxes=True,
+                row_heights=[0.55, 0.25, 0.20], vertical_spacing=0.02,
                 subplot_titles=(f"{tech_sym.upper()} · Price + Indicators", "MACD (12,26,9)", "RSI (14)"),
             )
 
-            # Price candlesticks
             fig.add_trace(go.Candlestick(
                 x=df.index, open=open_, high=high, low=low, close=close,
                 name="Price",
@@ -502,136 +609,104 @@ with tab_technicals:
                 increasing_fillcolor=GREEN, decreasing_fillcolor=RED,
                 line_width=1, showlegend=False,
             ), row=1, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=ema200, name="200 EMA",
+                line=dict(color="#d97706", width=1.5)), row=1, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=bb_upper, name="BB Upper",
+                line=dict(color="#7c3aed", width=1, dash="dot")), row=1, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=bb_lower, name="BB Lower",
+                line=dict(color="#7c3aed", width=1, dash="dot"),
+                fill="tonexty", fillcolor="rgba(124,58,237,0.05)"), row=1, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=bb_mid, name="BB Mid",
+                line=dict(color="#7c3aed", width=0.7, dash="dash")), row=1, col=1)
 
-            # 200 EMA
-            fig.add_trace(go.Scatter(
-                x=df.index, y=ema200, name="200 EMA",
-                line=dict(color="#ff9800", width=1.5, dash="solid"),
-            ), row=1, col=1)
-
-            # Bollinger Bands
-            fig.add_trace(go.Scatter(
-                x=df.index, y=bb_upper, name="BB Upper",
-                line=dict(color="#7b61ff", width=1, dash="dot"),
-            ), row=1, col=1)
-            fig.add_trace(go.Scatter(
-                x=df.index, y=bb_lower, name="BB Lower",
-                line=dict(color="#7b61ff", width=1, dash="dot"),
-                fill="tonexty", fillcolor="rgba(123,97,255,0.06)",
-            ), row=1, col=1)
-            fig.add_trace(go.Scatter(
-                x=df.index, y=bb_mid, name="BB Mid",
-                line=dict(color="#7b61ff", width=0.7, dash="dash"),
-            ), row=1, col=1)
-
-            # MACD
             colors_hist = [GREEN if v >= 0 else RED for v in histogram.fillna(0)]
-            fig.add_trace(go.Bar(
-                x=df.index, y=histogram, name="MACD Hist",
-                marker_color=colors_hist, showlegend=False,
-            ), row=2, col=1)
-            fig.add_trace(go.Scatter(
-                x=df.index, y=macd_line, name="MACD",
-                line=dict(color=BLUE, width=1.5),
-            ), row=2, col=1)
-            fig.add_trace(go.Scatter(
-                x=df.index, y=signal_line, name="Signal",
-                line=dict(color=YELLOW, width=1.2),
-            ), row=2, col=1)
+            fig.add_trace(go.Bar(x=df.index, y=histogram, name="MACD Hist",
+                marker_color=colors_hist, showlegend=False), row=2, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=macd_line, name="MACD",
+                line=dict(color=BLUE, width=1.5)), row=2, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=signal_line, name="Signal",
+                line=dict(color=YELLOW, width=1.2)), row=2, col=1)
 
-            # RSI
-            fig.add_trace(go.Scatter(
-                x=df.index, y=rsi, name="RSI",
-                line=dict(color="#00e5ff", width=1.5),
-            ), row=3, col=1)
-            fig.add_hline(y=70, line_color=RED, line_dash="dash", line_width=1, row=3, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=rsi, name="RSI",
+                line=dict(color="#0891b2", width=1.5)), row=3, col=1)
+            fig.add_hline(y=70, line_color=RED,   line_dash="dash", line_width=1, row=3, col=1)
             fig.add_hline(y=30, line_color=GREEN, line_dash="dash", line_width=1, row=3, col=1)
-            fig.add_hrect(y0=70, y1=100, fillcolor=RED, opacity=0.04, row=3, col=1)
-            fig.add_hrect(y0=0, y1=30, fillcolor=GREEN, opacity=0.04, row=3, col=1)
+            fig.add_hrect(y0=70, y1=100, fillcolor=RED,   opacity=0.03, row=3, col=1)
+            fig.add_hrect(y0=0,  y1=30,  fillcolor=GREEN, opacity=0.03, row=3, col=1)
 
             layout = plotly_base_layout(height=620)
             layout.update(
-                xaxis3=dict(gridcolor=PLOTLY_GRID, rangeslider_visible=False, showgrid=True),
-                yaxis3=dict(gridcolor=PLOTLY_GRID, range=[0, 100], showgrid=True),
+                xaxis3=dict(gridcolor=PLOTLY_GRID, rangeslider_visible=False),
+                yaxis3=dict(gridcolor=PLOTLY_GRID, range=[0, 100]),
                 xaxis_rangeslider_visible=False,
             )
             fig.update_layout(**layout)
             fig.update_xaxes(showgrid=True, gridcolor=PLOTLY_GRID)
             fig.update_yaxes(showgrid=True, gridcolor=PLOTLY_GRID)
-            for annotation in fig.layout.annotations:
-                annotation.font.size = 9
-                annotation.font.color = "#4a5568"
+            for ann in fig.layout.annotations:
+                ann.font.size = 9
+                ann.font.color = "#64748b"
 
             st.plotly_chart(fig, use_container_width=True)
 
             # ── Signal Summary ────────────────────────────────────────────────
             st.markdown("#### Signal Summary")
-            last_rsi = rsi.iloc[-1] if not rsi.empty else None
-            last_close = close.iloc[-1]
+            last_rsi    = rsi.iloc[-1] if not rsi.empty else None
+            last_close  = close.iloc[-1]
             last_ema200 = ema200.iloc[-1]
-            last_macd = macd_line.iloc[-1]
+            last_macd   = macd_line.iloc[-1]
             last_signal = signal_line.iloc[-1]
-            prev_macd = macd_line.iloc[-2] if len(macd_line) > 1 else None
+            prev_macd   = macd_line.iloc[-2] if len(macd_line) > 1 else None
             prev_signal = signal_line.iloc[-2] if len(signal_line) > 1 else None
             last_bb_upper = bb_upper.iloc[-1]
             last_bb_lower = bb_lower.iloc[-1]
 
             signals = []
-
-            # RSI signal
             if last_rsi is not None:
                 if last_rsi > 70:
-                    signals.append(("bearish", f"RSI is {last_rsi:.1f} → Overbought territory. Price may be stretched — consider caution on new longs."))
+                    signals.append(("bearish", f"RSI is {last_rsi:.1f} → Overbought. Consider caution on new longs."))
                 elif last_rsi < 30:
-                    signals.append(("bullish", f"RSI is {last_rsi:.1f} → Oversold territory. Potential bounce candidate — watch for reversal confirmation."))
+                    signals.append(("bullish", f"RSI is {last_rsi:.1f} → Oversold. Watch for reversal confirmation."))
                 else:
-                    signals.append(("neutral", f"RSI is {last_rsi:.1f} → Neutral zone (30–70). No extreme momentum signal at this time."))
+                    signals.append(("neutral", f"RSI is {last_rsi:.1f} → Neutral zone (30–70)."))
 
-            # 200 EMA signal
             if not np.isnan(last_ema200):
                 if last_close > last_ema200:
-                    signals.append(("bullish", f"Price ({last_close:,.2f}) is ABOVE 200 EMA ({last_ema200:,.2f}) → Long-term trend is bullish."))
+                    signals.append(("bullish", f"Price ({last_close:,.2f}) ABOVE 200 EMA ({last_ema200:,.2f}) → Long-term uptrend."))
                 else:
-                    signals.append(("bearish", f"Price ({last_close:,.2f}) is BELOW 200 EMA ({last_ema200:,.2f}) → Long-term trend is bearish."))
+                    signals.append(("bearish", f"Price ({last_close:,.2f}) BELOW 200 EMA ({last_ema200:,.2f}) → Long-term downtrend."))
 
-            # MACD crossover
             if prev_macd is not None and prev_signal is not None:
                 if prev_macd <= prev_signal and last_macd > last_signal:
-                    signals.append(("bullish", "MACD bullish crossover detected → MACD line crossed above signal line. Possible bullish momentum shift."))
+                    signals.append(("bullish", "MACD bullish crossover → Crossed above signal line. Possible momentum shift up."))
                 elif prev_macd >= prev_signal and last_macd < last_signal:
-                    signals.append(("bearish", "MACD bearish crossover detected → MACD line crossed below signal line. Possible bearish momentum shift."))
+                    signals.append(("bearish", "MACD bearish crossover → Crossed below signal line. Possible momentum shift down."))
                 elif last_macd > 0:
-                    signals.append(("bullish", f"MACD is positive ({last_macd:.3f}) → Bullish momentum continues. No crossover imminent."))
+                    signals.append(("bullish", f"MACD positive ({last_macd:.3f}) → Bullish momentum continues."))
                 else:
-                    signals.append(("bearish", f"MACD is negative ({last_macd:.3f}) → Bearish momentum. Watch for crossover above zero."))
+                    signals.append(("bearish", f"MACD negative ({last_macd:.3f}) → Bearish momentum."))
 
-            # Bollinger Bands signal
             if not np.isnan(last_bb_upper) and not np.isnan(last_bb_lower):
                 if last_close > last_bb_upper:
-                    signals.append(("bearish", f"Price ({last_close:,.2f}) is ABOVE the upper Bollinger Band ({last_bb_upper:,.2f}) → Potential overextension / mean-reversion risk."))
+                    signals.append(("bearish", f"Price ({last_close:,.2f}) ABOVE upper Bollinger Band → Overextension risk."))
                 elif last_close < last_bb_lower:
-                    signals.append(("bullish", f"Price ({last_close:,.2f}) is BELOW the lower Bollinger Band ({last_bb_lower:,.2f}) → Potential oversold / mean-reversion opportunity."))
+                    signals.append(("bullish", f"Price ({last_close:,.2f}) BELOW lower Bollinger Band → Oversold / mean-reversion opportunity."))
                 else:
-                    signals.append(("neutral", f"Price is trading within Bollinger Bands — no breakout or breakdown signal."))
+                    signals.append(("neutral", "Price within Bollinger Bands — no breakout/breakdown signal."))
 
-            # Render signals
             sig_cols = st.columns(2)
             for i, (stype, msg) in enumerate(signals):
                 with sig_cols[i % 2]:
                     icon = "🟢" if stype == "bullish" else "🔴" if stype == "bearish" else "🟡"
-                    st.markdown(
-                        f'<div class="signal-box signal-{stype}">{icon} {msg}</div>',
-                        unsafe_allow_html=True
-                    )
+                    st.markdown(f'<div class="signal-box signal-{stype}">{icon} {msg}</div>', unsafe_allow_html=True)
 
-            # ── Key stats row ─────────────────────────────────────────────────
             st.markdown("---")
             sc1, sc2, sc3, sc4, sc5 = st.columns(5)
-            sc1.metric("Last Close", fmt_price(last_close))
-            sc2.metric("RSI (14)", f"{last_rsi:.1f}" if last_rsi else "N/A")
-            sc3.metric("200 EMA", fmt_price(last_ema200))
-            sc4.metric("BB Upper", fmt_price(last_bb_upper))
-            sc5.metric("BB Lower", fmt_price(last_bb_lower))
+            sc1.metric("Last Close",  fmt_price(last_close))
+            sc2.metric("RSI (14)",    f"{last_rsi:.1f}" if last_rsi else "N/A")
+            sc3.metric("200 EMA",     fmt_price(last_ema200))
+            sc4.metric("BB Upper",    fmt_price(last_bb_upper))
+            sc5.metric("BB Lower",    fmt_price(last_bb_lower))
 
 
 # =============================================================================
@@ -639,39 +714,35 @@ with tab_technicals:
 # =============================================================================
 with tab_breadth:
     st.markdown("#### Nifty 50 Market Breadth — % Above 50-Day SMA")
-    st.caption("Data refreshes every hour. Fetching 50 tickers may take 15–30 seconds on first load.")
+    st.caption("Data refreshes every hour. First load may take 15–30 seconds.")
 
     with st.spinner("Calculating market breadth…"):
         breadth_df, pct_above = fetch_nifty50_breadth()
 
-    # ── Gauge Chart ───────────────────────────────────────────────────────────
     gauge_color = GREEN if pct_above >= 60 else RED if pct_above <= 40 else YELLOW
     fig_gauge = go.Figure(go.Indicator(
         mode="gauge+number+delta",
         value=pct_above,
         delta={"reference": 50, "valueformat": ".1f"},
-        title={"text": "% Nifty 50 Stocks Above 50 SMA", "font": {"size": 13, "color": "#8899aa", "family": "JetBrains Mono"}},
+        title={"text": "% Nifty 50 Stocks Above 50 SMA", "font": {"size": 13, "color": "#64748b", "family": "JetBrains Mono"}},
         number={"suffix": "%", "font": {"size": 36, "color": gauge_color, "family": "JetBrains Mono"}},
         gauge={
-            "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "#4a5568", "tickfont": {"size": 9}},
+            "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "#94a3b8", "tickfont": {"size": 9}},
             "bar": {"color": gauge_color, "thickness": 0.25},
             "bgcolor": PLOTLY_PLOT_BG,
-            "borderwidth": 0,
+            "borderwidth": 1, "bordercolor": "#e2e8f0",
             "steps": [
-                {"range": [0, 40], "color": "rgba(255,23,68,0.12)"},
-                {"range": [40, 60], "color": "rgba(255,214,0,0.08)"},
-                {"range": [60, 100], "color": "rgba(0,200,83,0.12)"},
+                {"range": [0,  40],  "color": "rgba(220,38,38,0.08)"},
+                {"range": [40, 60],  "color": "rgba(217,119,6,0.06)"},
+                {"range": [60, 100], "color": "rgba(22,163,74,0.08)"},
             ],
-            "threshold": {"line": {"color": "#ffffff", "width": 2}, "thickness": 0.8, "value": pct_above},
+            "threshold": {"line": {"color": "#1e293b", "width": 2}, "thickness": 0.8, "value": pct_above},
         },
     ))
     fig_gauge.update_layout(
-        template=PLOTLY_TEMPLATE,
-        paper_bgcolor=PLOTLY_PAPER_BG,
-        plot_bgcolor=PLOTLY_PLOT_BG,
-        height=260,
-        margin=dict(l=20, r=20, t=40, b=10),
-        font=dict(family="JetBrains Mono, monospace", color="#8899aa"),
+        template=PLOTLY_TEMPLATE, paper_bgcolor=PLOTLY_PAPER_BG, plot_bgcolor=PLOTLY_PLOT_BG,
+        height=260, margin=dict(l=20, r=20, t=40, b=10),
+        font=dict(family="JetBrains Mono, monospace", color="#475569"),
     )
 
     gc1, gc2 = st.columns([1, 1])
@@ -681,21 +752,18 @@ with tab_breadth:
         st.markdown("<br><br>", unsafe_allow_html=True)
         above_n = (breadth_df["Above50SMA"] == True).sum()
         below_n = (breadth_df["Above50SMA"] == False).sum()
-        err_n = breadth_df["Above50SMA"].isna().sum()
+        err_n   = breadth_df["Above50SMA"].isna().sum()
         st.metric("Stocks Above 50 SMA", f"{above_n} / {len(breadth_df)}")
         st.metric("Stocks Below 50 SMA", str(below_n))
         if err_n:
             st.caption(f"⚠️ {err_n} ticker(s) had data errors.")
-        
-        interp = ("🟢 Bullish breadth — majority of Nifty 50 stocks are in uptrend." if pct_above >= 60
-                  else "🔴 Bearish breadth — majority of Nifty 50 stocks are in downtrend." if pct_above <= 40
-                  else "🟡 Mixed breadth — market is at a crossroads (near 50% threshold).")
+        interp = ("🟢 Bullish breadth — majority in uptrend." if pct_above >= 60
+                  else "🔴 Bearish breadth — majority in downtrend." if pct_above <= 40
+                  else "🟡 Mixed breadth — market at crossroads.")
         st.markdown(f'<div class="signal-box">{interp}</div>', unsafe_allow_html=True)
 
-    # ── Sortable Table ────────────────────────────────────────────────────────
     st.markdown("---")
     st.markdown("##### Individual Stock Status")
-
     filter_opt = st.radio("Filter", ["All", "Above 50 SMA", "Below 50 SMA"], horizontal=True)
     display_df = breadth_df.copy()
     if filter_opt == "Above 50 SMA":
@@ -704,14 +772,14 @@ with tab_breadth:
         display_df = display_df[display_df["Above50SMA"] == False]
 
     def color_status(val):
-        if val == "Above 50 SMA":
-            return "color: #00c853; font-weight: 600"
-        elif val == "Below 50 SMA":
-            return "color: #ff1744; font-weight: 600"
-        return "color: #8899aa"
+        if val == "Above 50 SMA":  return "color: #16a34a; font-weight: 600"
+        elif val == "Below 50 SMA": return "color: #dc2626; font-weight: 600"
+        return "color: #94a3b8"
 
-    styled = display_df[["Ticker", "Status"]].style.applymap(color_status, subset=["Status"])
-    st.dataframe(styled, use_container_width=True, height=420, hide_index=True)
+    st.dataframe(
+        display_df[["Ticker", "Status"]].style.applymap(color_status, subset=["Status"]),
+        use_container_width=True, height=420, hide_index=True
+    )
 
 
 # =============================================================================
@@ -721,42 +789,39 @@ with tab_news:
     st.markdown("#### Geopolitical & Market News Command Center")
 
     GLOBAL_FEEDS = {
-        "Reuters World News": "https://feeds.reuters.com/Reuters/worldNews",
-        "Reuters Business": "https://feeds.reuters.com/reuters/businessNews",
-        "Reuters Markets": "https://feeds.reuters.com/reuters/financialsNews",
+        "Reuters World News":   "https://feeds.reuters.com/Reuters/worldNews",
+        "Reuters Business":     "https://feeds.reuters.com/reuters/businessNews",
+        "Reuters Markets":      "https://feeds.reuters.com/reuters/financialsNews",
         "Moneycontrol Markets": "https://www.moneycontrol.com/rss/marketreports.xml",
         "Economic Times Markets": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
     }
 
     news_tab1, news_tab2 = st.tabs(["🌐 Global Macro", "💼 My Portfolio News"])
 
-    def render_news_items(items, source_override=None):
+    def render_news_items(items):
         if not items:
-            st.warning("No items fetched. The feed may be unavailable or rate-limited.")
+            st.warning("No items fetched. Feed may be unavailable.")
             return
         for item in items:
-            src = source_override or item["source"]
             st.markdown(
                 f"""<div class="news-card">
-                    <div class="news-headline"><a href="{item['link']}" target="_blank" style="color:#00b4d8;text-decoration:none;">{item['title']}</a></div>
-                    <div class="news-meta">📡 {src} &nbsp;·&nbsp; 🕐 {item['published']}</div>
+                    <div class="news-headline"><a href="{item['link']}" target="_blank"
+                        style="color:#0057b8;text-decoration:none;">{item['title']}</a></div>
+                    <div class="news-meta">📡 {item['source']} &nbsp;·&nbsp; 🕐 {item['published']}</div>
                 </div>""",
                 unsafe_allow_html=True
             )
 
     with news_tab1:
-        st.caption("Aggregating from Reuters, Moneycontrol, Economic Times, and more.")
+        st.caption("Aggregating from Reuters, Moneycontrol, Economic Times.")
         all_global = []
         with st.spinner("Fetching global news feeds…"):
             for src_name, url in GLOBAL_FEEDS.items():
-                items = fetch_rss(url)
-                for item in items:
+                for item in fetch_rss(url):
                     item["source"] = src_name
                     all_global.append(item)
-        # Sort by published string (best-effort)
         all_global.sort(key=lambda x: x.get("published", ""), reverse=True)
-        for item in all_global[:40]:
-            render_news_items([item])
+        render_news_items(all_global[:40])
 
     with news_tab2:
         user_feeds = {k: v for k, v in {
@@ -766,21 +831,19 @@ with tab_news:
         }.items() if v.strip()}
 
         if not user_feeds:
-            st.info("📌 Enter your personal RSS feed URLs in the **sidebar** to see your curated news here.")
+            st.info("📌 Enter your personal RSS feed URLs in the **sidebar** to see curated news here.")
         else:
             all_user = []
             with st.spinner("Fetching your custom feeds…"):
                 for label, url in user_feeds.items():
-                    items = fetch_rss(url)
-                    for item in items:
+                    for item in fetch_rss(url):
                         item["source"] = label
                         all_user.append(item)
             all_user.sort(key=lambda x: x.get("published", ""), reverse=True)
             if all_user:
-                for item in all_user[:30]:
-                    render_news_items([item])
+                render_news_items(all_user[:30])
             else:
-                st.warning("⚠️ No items fetched from your custom feeds. Verify the URLs are valid RSS feeds.")
+                st.warning("⚠️ No items fetched. Verify the URLs are valid RSS feeds.")
 
 
 # =============================================================================
@@ -793,121 +856,100 @@ with tab_calendar:
         "Add rows as `{'Date': 'DD Mon YYYY', 'Time': 'HH:MM IST', 'Event': '...', 'Country': '...', 'Impact': 'High/Medium/Low'}`."
     )
 
-    # ── CALENDAR DATA ── (Update this list manually)
+    # ── CALENDAR DATA ── (Update this list manually when dates change)
     events = [
-        {"Date": "20 Mar 2025", "Time": "10:00 IST", "Event": "RBI Monetary Policy Decision", "Country": "🇮🇳 India", "Impact": "High"},
-        {"Date": "19 Mar 2025", "Time": "23:30 IST", "Event": "US FOMC Rate Decision", "Country": "🇺🇸 USA", "Impact": "High"},
-        {"Date": "20 Mar 2025", "Time": "18:30 IST", "Event": "US CPI Inflation (Feb)", "Country": "🇺🇸 USA", "Impact": "High"},
-        {"Date": "28 Mar 2025", "Time": "18:30 IST", "Event": "US PCE Price Index (Feb)", "Country": "🇺🇸 USA", "Impact": "High"},
-        {"Date": "31 Mar 2025", "Time": "17:30 IST", "Event": "India GDP Growth (Q3 FY25)", "Country": "🇮🇳 India", "Impact": "High"},
-        {"Date": "04 Apr 2025", "Time": "18:30 IST", "Event": "US Non-Farm Payrolls (Mar)", "Country": "🇺🇸 USA", "Impact": "High"},
-        {"Date": "07 Apr 2025", "Time": "18:30 IST", "Event": "US CPI Inflation (Mar)", "Country": "🇺🇸 USA", "Impact": "High"},
-        {"Date": "09 Apr 2025", "Time": "18:30 IST", "Event": "US PPI (Mar)", "Country": "🇺🇸 USA", "Impact": "Medium"},
-        {"Date": "09 Apr 2025", "Time": "18:00 IST", "Event": "ECB Rate Decision", "Country": "🇪🇺 EU", "Impact": "High"},
-        {"Date": "30 Apr 2025", "Time": "20:30 IST", "Event": "US GDP Growth (Q1 2025 Advance)", "Country": "🇺🇸 USA", "Impact": "High"},
-        {"Date": "07 May 2025", "Time": "10:00 IST", "Event": "RBI Monetary Policy Decision", "Country": "🇮🇳 India", "Impact": "High"},
-        {"Date": "07 May 2025", "Time": "23:30 IST", "Event": "US FOMC Rate Decision", "Country": "🇺🇸 USA", "Impact": "High"},
-        {"Date": "02 May 2025", "Time": "18:30 IST", "Event": "US Non-Farm Payrolls (Apr)", "Country": "🇺🇸 USA", "Impact": "High"},
-        {"Date": "15 May 2025", "Time": "18:30 IST", "Event": "US CPI Inflation (Apr)", "Country": "🇺🇸 USA", "Impact": "High"},
-        {"Date": "18 Jun 2025", "Time": "23:30 IST", "Event": "US FOMC Rate Decision", "Country": "🇺🇸 USA", "Impact": "High"},
-        {"Date": "06 Aug 2025", "Time": "23:30 IST", "Event": "US FOMC Rate Decision", "Country": "🇺🇸 USA", "Impact": "High"},
-        {"Date": "17 Sep 2025", "Time": "23:30 IST", "Event": "US FOMC Rate Decision", "Country": "🇺🇸 USA", "Impact": "High"},
-        {"Date": "05 Nov 2025", "Time": "23:30 IST", "Event": "US FOMC Rate Decision", "Country": "🇺🇸 USA", "Impact": "High"},
-        {"Date": "17 Dec 2025", "Time": "23:30 IST", "Event": "US FOMC Rate Decision", "Country": "🇺🇸 USA", "Impact": "High"},
+        {"Date": "20 Mar 2025", "Time": "10:00 IST", "Event": "RBI Monetary Policy Decision",       "Country": "🇮🇳 India", "Impact": "High"},
+        {"Date": "19 Mar 2025", "Time": "23:30 IST", "Event": "US FOMC Rate Decision",              "Country": "🇺🇸 USA",   "Impact": "High"},
+        {"Date": "20 Mar 2025", "Time": "18:30 IST", "Event": "US CPI Inflation (Feb)",             "Country": "🇺🇸 USA",   "Impact": "High"},
+        {"Date": "28 Mar 2025", "Time": "18:30 IST", "Event": "US PCE Price Index (Feb)",           "Country": "🇺🇸 USA",   "Impact": "High"},
+        {"Date": "31 Mar 2025", "Time": "17:30 IST", "Event": "India GDP Growth (Q3 FY25)",         "Country": "🇮🇳 India", "Impact": "High"},
+        {"Date": "04 Apr 2025", "Time": "18:30 IST", "Event": "US Non-Farm Payrolls (Mar)",         "Country": "🇺🇸 USA",   "Impact": "High"},
+        {"Date": "07 Apr 2025", "Time": "18:30 IST", "Event": "US CPI Inflation (Mar)",             "Country": "🇺🇸 USA",   "Impact": "High"},
+        {"Date": "09 Apr 2025", "Time": "18:30 IST", "Event": "US PPI (Mar)",                       "Country": "🇺🇸 USA",   "Impact": "Medium"},
+        {"Date": "09 Apr 2025", "Time": "18:00 IST", "Event": "ECB Rate Decision",                  "Country": "🇪🇺 EU",    "Impact": "High"},
+        {"Date": "30 Apr 2025", "Time": "20:30 IST", "Event": "US GDP Growth (Q1 2025 Advance)",    "Country": "🇺🇸 USA",   "Impact": "High"},
+        {"Date": "07 May 2025", "Time": "10:00 IST", "Event": "RBI Monetary Policy Decision",       "Country": "🇮🇳 India", "Impact": "High"},
+        {"Date": "07 May 2025", "Time": "23:30 IST", "Event": "US FOMC Rate Decision",              "Country": "🇺🇸 USA",   "Impact": "High"},
+        {"Date": "02 May 2025", "Time": "18:30 IST", "Event": "US Non-Farm Payrolls (Apr)",         "Country": "🇺🇸 USA",   "Impact": "High"},
+        {"Date": "15 May 2025", "Time": "18:30 IST", "Event": "US CPI Inflation (Apr)",             "Country": "🇺🇸 USA",   "Impact": "High"},
+        {"Date": "18 Jun 2025", "Time": "23:30 IST", "Event": "US FOMC Rate Decision",              "Country": "🇺🇸 USA",   "Impact": "High"},
+        {"Date": "06 Aug 2025", "Time": "23:30 IST", "Event": "US FOMC Rate Decision",              "Country": "🇺🇸 USA",   "Impact": "High"},
+        {"Date": "17 Sep 2025", "Time": "23:30 IST", "Event": "US FOMC Rate Decision",              "Country": "🇺🇸 USA",   "Impact": "High"},
+        {"Date": "05 Nov 2025", "Time": "23:30 IST", "Event": "US FOMC Rate Decision",              "Country": "🇺🇸 USA",   "Impact": "High"},
+        {"Date": "17 Dec 2025", "Time": "23:30 IST", "Event": "US FOMC Rate Decision",              "Country": "🇺🇸 USA",   "Impact": "High"},
     ]
     # ── END CALENDAR DATA ──
 
     cal_df = pd.DataFrame(events)
 
     def impact_color(val):
-        if val == "High":
-            return "color: #ff1744; font-weight: 700"
-        elif val == "Medium":
-            return "color: #ffd600; font-weight: 600"
-        return "color: #00c853"
+        if val == "High":   return "color: #dc2626; font-weight: 700"
+        elif val == "Medium": return "color: #d97706; font-weight: 600"
+        return "color: #16a34a"
 
-    # Filter controls
     cc1, cc2 = st.columns([1, 2])
     with cc1:
         impact_filter = st.multiselect("Impact Filter", ["High", "Medium", "Low"], default=["High", "Medium"])
     with cc2:
-        country_filter = st.multiselect(
-            "Country Filter",
-            cal_df["Country"].unique().tolist(),
-            default=cal_df["Country"].unique().tolist(),
-        )
+        country_filter = st.multiselect("Country Filter", cal_df["Country"].unique().tolist(),
+                                        default=cal_df["Country"].unique().tolist())
 
-    filtered_cal = cal_df[
-        cal_df["Impact"].isin(impact_filter) &
-        cal_df["Country"].isin(country_filter)
-    ]
+    filtered_cal = cal_df[cal_df["Impact"].isin(impact_filter) & cal_df["Country"].isin(country_filter)]
+    st.dataframe(
+        filtered_cal.style.applymap(impact_color, subset=["Impact"]),
+        use_container_width=True, height=480, hide_index=True
+    )
 
-    styled_cal = filtered_cal.style.applymap(impact_color, subset=["Impact"])
-    st.dataframe(styled_cal, use_container_width=True, height=480, hide_index=True)
-
-    # TradingView Economic Calendar embed as bonus
     st.markdown("---")
     with st.expander("📅 TradingView Economic Calendar (Live)"):
         tv_cal_html = """
-        <div class="tradingview-widget-container">
-          <iframe src="https://s.tradingview.com/embed-widget/events/?locale=en#%7B%22colorTheme%22%3A%22dark%22%2C%22isTransparent%22%3Atrue%2C%22width%22%3A%22100%25%22%2C%22height%22%3A%22450%22%2C%22importanceFilter%22%3A%22-1%2C0%2C1%22%2C%22countryFilter%22%3A%22in%2Cus%2Ceu%22%7D"
-            style="width:100%;height:450px;border:none;"
-            allowtransparency="true">
-          </iframe>
-        </div>
-        """
+        <iframe src="https://s.tradingview.com/embed-widget/events/?locale=en#%7B%22colorTheme%22%3A%22light%22%2C%22isTransparent%22%3Atrue%2C%22width%22%3A%22100%25%22%2C%22height%22%3A%22450%22%2C%22importanceFilter%22%3A%22-1%2C0%2C1%22%2C%22countryFilter%22%3A%22in%2Cus%2Ceu%22%7D"
+            style="width:100%;height:450px;border:none;" allowtransparency="true">
+        </iframe>"""
         st.components.v1.html(tv_cal_html, height=460)
 
 
 # =============================================================================
-# TAB 6 — TradingView (duplicate placed here for navigation convenience)
+# TAB 6 — TradingView Advanced
 # =============================================================================
 with tab_tv:
     st.markdown("#### Advanced TradingView Widget")
-    st.caption("Full-featured TradingView chart with drawing tools, indicators, and real-time data.")
+    st.caption("Full-featured chart with drawing tools, indicators, and real-time data.")
 
     tv2_sym = st.text_input(
         "Symbol", value="NSE:NIFTY", key="tv2_sym",
         help="Examples: NSE:NIFTY, BSE:SENSEX, NASDAQ:AAPL, COMEX:GC1!, NYMEX:CL1!"
     )
     tv2_html = f"""
-    <div class="tradingview-widget-container" style="height:700px;width:100%;">
+    <div style="height:700px;width:100%;">
       <div id="tradingview_adv" style="height:100%;width:100%;"></div>
       <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
       <script type="text/javascript">
         new TradingView.widget({{
-          "width": "100%",
-          "height": 680,
-          "symbol": "{tv2_sym}",
-          "interval": "D",
-          "timezone": "Asia/Kolkata",
-          "theme": "dark",
-          "style": "1",
-          "locale": "en",
-          "toolbar_bg": "#0d0d14",
-          "enable_publishing": false,
-          "withdateranges": true,
-          "hide_side_toolbar": false,
-          "allow_symbol_change": true,
+          "width": "100%", "height": 680,
+          "symbol": "{tv2_sym}", "interval": "D",
+          "timezone": "Asia/Kolkata", "theme": "light", "style": "1",
+          "locale": "en", "toolbar_bg": "#f8f9fb",
+          "enable_publishing": false, "withdateranges": true,
+          "hide_side_toolbar": false, "allow_symbol_change": true,
           "studies": ["RSI@tv-basicstudies", "MACD@tv-basicstudies", "BB@tv-basicstudies"],
           "container_id": "tradingview_adv",
-          "show_popup_button": true,
-          "popup_width": "1000",
-          "popup_height": "650"
+          "show_popup_button": true, "popup_width": "1000", "popup_height": "650"
         }});
       </script>
-    </div>
-    """
+    </div>"""
     st.components.v1.html(tv2_html, height=700)
+
 
 # =============================================================================
 # FOOTER
 # =============================================================================
 st.markdown("---")
 st.markdown(
-    '<div style="text-align:center; font-family:\'JetBrains Mono\',monospace; font-size:0.62rem; color:#2a3040;">'
+    '<div style="text-align:center;font-family:\'JetBrains Mono\',monospace;font-size:0.62rem;color:#94a3b8;">'
     "📊 INVESTMENT DASHBOARD · For personal research only. Not financial advice. "
-    "Data via yfinance / TradingView / RSS. Prices may be delayed 15–20 min."
+    "Data via yfinance / TradingView / RSS. Prices may be delayed 15–20 min. "
+    "MCX commodity prices are COMEX proxies (GC=F, SI=F, HG=F)."
     "</div>",
     unsafe_allow_html=True
 )
