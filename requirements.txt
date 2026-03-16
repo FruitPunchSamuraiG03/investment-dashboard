@@ -1,0 +1,10 @@
+# Investment Dashboard — Requirements
+# Tested with Python 3.10 / 3.11 on Streamlit Community Cloud
+
+streamlit==1.35.0
+yfinance==0.2.40
+pandas==2.2.2
+numpy==1.26.4
+plotly==5.22.0
+feedparser==6.0.11
+streamlit-autorefresh==1.0.1
