@@ -59,13 +59,47 @@ st.markdown("""
 
     /* ── Base ── */
     .stApp { background-color: #f4f6f9; color: #1a202c; font-family: 'Inter', sans-serif; }
-    section[data-testid="stSidebar"] { background-color: #ffffff; border-right: 1px solid #e2e8f0; }
+    /* Move sidebar to the right */
+    section[data-testid="stSidebar"] {
+        background-color: #ffffff;
+        border-left: 1px solid #e2e8f0;
+        border-right: none;
+        right: 0 !important;
+        left: auto !important;
+    }
+    /* Sidebar collapse button: move to right side */
+    [data-testid="stSidebarCollapseButton"] {
+        right: 0 !important;
+        left: auto !important;
+    }
+    /* When sidebar open, main content shifts LEFT not right */
+    .stMainBlockContainer { margin-right: 0 !important; }
     [data-testid="stHeader"] { background-color: #ffffff; border-bottom: 1px solid #e2e8f0; }
 
-    /* ── Push main content below the sticky ticker bar ── */
+    /* ── Push main content below ticker bar and right of watchlist panel ── */
     [data-testid="stAppViewContainer"] > .main > .block-container {
         padding-top: 158px !important;
+        padding-left: 256px !important;   /* watchlist panel (240px) + 16px gap */
+        max-width: 100% !important;
     }
+
+    /* ── Left watchlist panel ── */
+    #wl-panel {
+        position: fixed;
+        top: 104px;       /* header + ticker */
+        left: 0;
+        width: 240px;
+        bottom: 0;
+        z-index: 988;
+        background: #ffffff;
+        border-right: 1px solid #e2e8f0;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: #e2e8f0 transparent;
+        box-shadow: 2px 0 8px rgba(0,0,0,0.04);
+    }
+    #wl-panel::-webkit-scrollbar { width: 4px; }
+    #wl-panel::-webkit-scrollbar-thumb { background:#e2e8f0; border-radius:3px; }
 
     /* ── Sticky ticker bar ── */
     #ticker-bar-wrapper {
@@ -474,6 +508,102 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# ── Left watchlist panel — rendered as fixed HTML, refreshed with auto-refresh ─
+if "watchlist" not in st.session_state:
+    st.session_state.watchlist = ["HDFCBANK","RELIANCE","TCS","ICICIBANK","AXISBANK"]
+
+_wl_rows_html = ""
+for _sym in st.session_state.watchlist:
+    _p, _c = fetch_ticker_snapshot(f"{_sym}.NS")
+    _price_str = f"₹{_p:,.2f}" if _p else "—"
+    if _c is None or (isinstance(_c, float) and np.isnan(_c)):
+        _chg_str, _chg_clr = "—", "#94a3b8"
+    elif _c > 0:
+        _chg_str, _chg_clr = f"+{_c:.2f}%", "#16a34a"
+    elif _c < 0:
+        _chg_str, _chg_clr = f"{_c:.2f}%", "#dc2626"
+    else:
+        _chg_str, _chg_clr = "0.00%", "#94a3b8"
+    _wl_rows_html += f"""
+    <div class="wl-row">
+      <span class="wl-sym">{_sym}</span>
+      <div class="wl-nums">
+        <span class="wl-price">{_price_str}</span>
+        <span class="wl-chg" style="color:{_chg_clr};">{_chg_str}</span>
+      </div>
+    </div>"""
+
+_wl_panel_html = f"""
+<div id="wl-panel">
+  <div class="wl-header">
+    <span class="wl-title">👁 Watchlist</span>
+    <span class="wl-count">{len(st.session_state.watchlist)}</span>
+  </div>
+  <div class="wl-body">
+    {_wl_rows_html if _wl_rows_html else '<div class="wl-empty">Add symbols in Portfolio → Watchlist</div>'}
+  </div>
+</div>
+<style>
+  #wl-panel {{
+    position: fixed; top: 104px; left: 0; width: 240px; bottom: 0;
+    z-index: 988; background: #ffffff;
+    border-right: 1px solid #e2e8f0;
+    box-shadow: 2px 0 8px rgba(0,0,0,.04);
+    display: flex; flex-direction: column;
+    font-family: Inter, sans-serif;
+  }}
+  .wl-header {{
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px 8px 14px;
+    border-bottom: 2px solid #e2e8f0;
+    background: #ffffff;
+    flex-shrink: 0;
+  }}
+  .wl-title {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .7rem; font-weight: 700; color: #1e293b;
+    letter-spacing: .05em; text-transform: uppercase;
+  }}
+  .wl-count {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .65rem; color: #94a3b8;
+    background: #f1f5f9; border-radius: 10px;
+    padding: 1px 7px;
+  }}
+  .wl-body {{
+    overflow-y: auto; flex: 1;
+    scrollbar-width: thin; scrollbar-color: #e2e8f0 transparent;
+    padding: 4px 0;
+  }}
+  .wl-body::-webkit-scrollbar {{ width: 3px; }}
+  .wl-body::-webkit-scrollbar-thumb {{ background: #e2e8f0; border-radius: 2px; }}
+  .wl-row {{
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 14px; border-bottom: 1px solid #f8fafc;
+    cursor: default; transition: background .15s;
+  }}
+  .wl-row:hover {{ background: #f8fafc; }}
+  .wl-sym {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .75rem; font-weight: 700; color: #1e293b;
+  }}
+  .wl-nums {{ display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }}
+  .wl-price {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .72rem; color: #334155; font-weight: 600;
+  }}
+  .wl-chg {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .65rem; font-weight: 600;
+  }}
+  .wl-empty {{
+    padding: 20px 14px; font-size: .75rem; color: #94a3b8;
+    text-align: center; line-height: 1.5;
+  }}
+</style>
+"""
+st.markdown(_wl_panel_html, unsafe_allow_html=True)
+
 # ── Sidebar-aware sticky bar: shift left margin dynamically ──────────────────
 st.components.v1.html("""
 <script>
@@ -495,22 +625,16 @@ st.components.v1.html("""
   function updateTickerBar() {
     var bar = doc.getElementById('ticker-bar-wrapper');
     if (!bar) return;
-    var w = getSidebarWidth();
-    bar.style.left = w + 'px';
+    // Sidebar is now on the RIGHT — ticker bar left starts after watchlist panel (240px)
+    var WL_PANEL_W = 240;
+    bar.style.left = WL_PANEL_W + 'px';
     bar.style.transition = 'left 0.3s ease';
   }
 
   // Run immediately
   updateTickerBar();
 
-  // Watch for sidebar expand/collapse via MutationObserver
-  var sidebar = doc.querySelector('[data-testid="stSidebar"]');
-  if (sidebar) {
-    var mo = new MutationObserver(updateTickerBar);
-    mo.observe(sidebar, { attributes: true, attributeFilter: ['aria-expanded', 'style', 'class'] });
-  }
-
-  // Also watch for any DOM resize (window resize covers mobile rotations)
+  // Sidebar moved to right — no longer affects ticker bar left offset
   window.parent.addEventListener('resize', updateTickerBar);
 
   // Poll every 300ms for the first 5 seconds to catch late renders
@@ -1005,35 +1129,30 @@ with tab_calendar:
 # TAB 1 (was 6) — Chart
 # =============================================================================
 with tab_overview:
-    ov_chart, ov_fii, ov_deals, ov_events, ov_watchlist = st.tabs([
-        "📈 Chart",
-        "🏦 FII / DII",
-        "📋 Block Deals",
-        "📆 Corp Events",
-        "👁️ Watchlist",
-    ])
+    # ── 📈 Chart ──────────────────────────────────────────────────────────────
+    st.markdown("#### 📈 Chart")
+    st.caption("Full-featured TradingView chart. Enter any ticker — NSE stocks: HDFCBANK, RELIANCE. Global: AAPL, MSFT.")
+    tv2_sym = st.text_input(
+        "Symbol", value="HDFCBANK", key="tv2_sym",
+        help="For NSE stocks use just the ticker e.g. HDFCBANK, RELIANCE. Global: AAPL, MSFT."
+    )
+    import urllib.parse as _ul
+    tv2_params = _ul.urlencode({
+        "symbol": tv2_sym, "interval": "D", "timezone": "Asia/Kolkata",
+        "theme": "light", "style": "1", "locale": "en", "toolbar_bg": "#f8f9fb",
+        "enable_publishing": "false", "withdateranges": "true",
+        "hide_side_toolbar": "false", "allow_symbol_change": "true",
+        "studies": "RSI@tv-basicstudies,MACD@tv-basicstudies,BB@tv-basicstudies",
+        "show_popup_button": "true", "save_image": "false",
+    })
+    tv2_iframe_url = f"https://s.tradingview.com/widgetembed/?{tv2_params}"
+    tv2_html = f'''<iframe src="{tv2_iframe_url}"
+      style="width:100%;height:690px;border:none;display:block;border-radius:8px;"
+      allowtransparency="true" scrolling="no" frameborder="0"></iframe>'''
+    st.components.v1.html(tv2_html, height=700)
 
-    with ov_chart:
-        st.markdown("#### 📈 Chart")
-        st.caption("Full-featured TradingView chart. Enter any ticker — NSE stocks: HDFCBANK, RELIANCE. Global: AAPL, MSFT.")
-        tv2_sym = st.text_input(
-            "Symbol", value="HDFCBANK", key="tv2_sym",
-            help="For NSE stocks use just the ticker e.g. HDFCBANK, RELIANCE. Global: AAPL, MSFT."
-        )
-        import urllib.parse as _ul
-        tv2_params = _ul.urlencode({
-            "symbol": tv2_sym, "interval": "D", "timezone": "Asia/Kolkata",
-            "theme": "light", "style": "1", "locale": "en", "toolbar_bg": "#f8f9fb",
-            "enable_publishing": "false", "withdateranges": "true",
-            "hide_side_toolbar": "false", "allow_symbol_change": "true",
-            "studies": "RSI@tv-basicstudies,MACD@tv-basicstudies,BB@tv-basicstudies",
-            "show_popup_button": "true", "save_image": "false",
-        })
-        tv2_iframe_url = f"https://s.tradingview.com/widgetembed/?{tv2_params}"
-        tv2_html = f'''<iframe src="{tv2_iframe_url}"
-          style="width:100%;height:690px;border:none;display:block;border-radius:8px;"
-          allowtransparency="true" scrolling="no" frameborder="0"></iframe>'''
-        st.components.v1.html(tv2_html, height=700)
+    # Map alias vars so rest of code keeps working (intel_* used below)
+    ov_fii = ov_deals = ov_events = ov_watchlist = None  # not used as tabs anymore
 
 
 # =============================================================================
@@ -2385,7 +2504,7 @@ st.components.v1.html("""
     if (!stuck) {
       tabBar.style.position  = 'fixed';
       tabBar.style.top       = TICKER_H + 'px';
-      tabBar.style.left      = '0';
+      tabBar.style.left      = '240px'; // watchlist panel width
       tabBar.style.right     = '0';
       tabBar.style.zIndex    = '989';
       tabBar.style.background = '#ffffff';
@@ -2435,7 +2554,7 @@ st.components.v1.html("""
 
   function updateTabBarLeft() {
     if (stuck && tabBar) {
-      tabBar.style.left = getSidebarWidth() + 'px';
+      tabBar.style.left = '240px'; // watchlist panel width; sidebar is on right
     }
   }
 
@@ -2479,22 +2598,19 @@ st.components.v1.html("""
 # TAB — MARKET INTEL  (FII/DII · Block Deals · Corp Events · Watchlist)
 # Consolidated from 4 tabs into one for a cleaner nav bar.
 # =============================================================================
-# The FII/DII, Deals, Events, Watchlist sub-tabs live inside tab_overview above.
-# Map the old variable names to the new ones so all the code below still works.
-intel_fii       = ov_fii
-intel_deals     = ov_deals
-intel_events    = ov_events
-intel_watchlist = ov_watchlist
-
-with tab_overview:
-    pass  # all overview content is inside the sub-tabs defined above
+# Overview is now a single scrollable page.
+# The intel_* sections render inline inside tab_overview below.
 
     # =========================================================================
     # FII / DII FLOWS
     # NSE publishes daily provisional FII/DII data.
     # We scrape the NSE market-data page HTML as fallback if the API returns 0.
     # =========================================================================
-    with intel_fii:
+
+with tab_overview:
+    st.markdown("---")
+    # ── 🏦 FII / DII ──────────────────────────────────────────────────────────
+    if True:
         st.markdown("##### 🏦 FII / DII Flow Tracker")
         st.caption(
             "NSE India blocks direct API access from cloud servers (requires a live browser session). "
@@ -2592,7 +2708,11 @@ with tab_overview:
     # BLOCK & BULK DEALS
     # Scraping NSE website tables directly (more reliable than the API)
     # =========================================================================
-    with intel_deals:
+
+with tab_overview:
+    st.markdown("---")
+    # ── 📋 Block & Bulk Deals ────────────────────────────────────────────────
+    if True:
         st.markdown("##### 📋 Block & Bulk Deals")
         st.caption("Block deals ≥₹10 Cr · Bulk deals >0.5% equity · NSE India · Today")
 
@@ -2661,7 +2781,11 @@ with tab_overview:
     # =========================================================================
     # CORPORATE EVENTS
     # =========================================================================
-    with intel_events:
+
+with tab_overview:
+    st.markdown("---")
+    # ── 📆 Corporate Events ──────────────────────────────────────────────────
+    if True:
         st.markdown("##### 📆 Corporate Events")
         st.caption("Board meetings · Dividends · Bonus · Splits · Rights — from NSE India")
 
@@ -2740,14 +2864,14 @@ with tab_overview:
     # =========================================================================
     # WATCHLIST
     # =========================================================================
-    with intel_watchlist:
-        st.markdown("##### 👁️ Watchlist")
-        st.caption("Track stocks you're monitoring. Press Enter or click Add.")
+    # ── Watchlist now lives in the left panel — manage it here ──────────────
+    # The left panel shows live prices automatically.
+    # Use the form below to add or remove symbols.
+    with tab_overview:
+        st.markdown("---")
+        st.markdown("#### 👁 Manage Watchlist")
+        st.caption("Symbols added here appear in the left panel with live prices.")
 
-        if "watchlist" not in st.session_state:
-            st.session_state.watchlist = ["HDFCBANK","RELIANCE","TCS","ICICIBANK","AXISBANK"]
-
-        # Add row — Enter key works via form ──────────────────────────────────
         with st.form(key="wl_add_form", clear_on_submit=True):
             wfa, wfb = st.columns([4, 1])
             with wfa:
@@ -2763,112 +2887,22 @@ with tab_overview:
                     st.session_state.watchlist.append(s)
                     st.rerun()
 
-        # Remove row ──────────────────────────────────────────────────────────
         if st.session_state.watchlist:
             wr1, wr2 = st.columns([4, 1])
             with wr1:
                 to_remove = st.multiselect(
-                    "Remove", st.session_state.watchlist,
+                    "Remove symbols", st.session_state.watchlist,
                     key="wl_remove_multi", label_visibility="collapsed",
-                    placeholder="Select symbols to remove…"
+                    placeholder="Select to remove…"
                 )
             with wr2:
+                st.markdown("<div style='height:26px'></div>", unsafe_allow_html=True)
                 if st.button("🗑️ Remove", use_container_width=True, key="wl_remove_btn"):
-                    st.session_state.watchlist = [
-                        s for s in st.session_state.watchlist if s not in to_remove
-                    ]
-                    st.rerun()
-
-        st.markdown("---")
-
-        if not st.session_state.watchlist:
-            st.info("Watchlist is empty. Add a symbol above.")
-        else:
-            @st.cache_data(ttl=60)
-            def fetch_watchlist_data(symbols_tuple):
-                rows = []
-                for sym in symbols_tuple:
-                    price, chg = fetch_ticker_snapshot(f"{sym}.NS")
-                    tech = None
-                    try:
-                        df_t = yf.download(f"{sym}.NS", period="1y", interval="1d",
-                                           progress=False, auto_adjust=True)
-                        if not df_t.empty and len(df_t) >= 30:
-                            close  = df_t["Close"].squeeze()
-                            high   = df_t["High"].squeeze()
-                            low    = df_t["Low"].squeeze()
-                            ema200 = float(close.ewm(span=200,adjust=False).mean().iloc[-1])
-                            ltp    = float(close.iloc[-1])
-                            d_     = close.diff()
-                            g_     = d_.clip(lower=0).ewm(com=13,min_periods=14).mean()
-                            l_     = (-d_.clip(upper=0)).ewm(com=13,min_periods=14).mean()
-                            rsi    = float((100-100/(1+g_/l_.replace(0,0.0001))).iloc[-1])
-                            w52h   = float(high.tail(252).max())
-                            w52l   = float(low.tail(252).min())
-                            w52p   = (ltp-w52l)/(w52h-w52l)*100 if w52h!=w52l else 50
-                            tech   = {"rsi":round(rsi,1),"above_200":ltp>ema200,
-                                      "ema200":round(ema200,2),"w52_pos":round(w52p,1)}
-                    except Exception:
-                        pass
-                    rows.append({
-                        "Symbol":    sym,
-                        "Price":     round(price,2)         if price else None,
-                        "Day %":     round(chg,2)           if chg   else None,
-                        "RSI":       tech["rsi"]            if tech  else None,
-                        "vs 200EMA": ("Above" if tech["above_200"] else "Below") if tech else None,
-                        "52w Pos %": tech["w52_pos"]        if tech  else None,
-                    })
-                return rows
-
-            with st.spinner(f"Loading {len(st.session_state.watchlist)} symbols…"):
-                wl_rows = fetch_watchlist_data(tuple(st.session_state.watchlist))
-
-            wl_df = pd.DataFrame(wl_rows)
-
-            def _wl_chg(v):
-                if isinstance(v,float): return "color:#16a34a;font-weight:600" if v>0 else "color:#dc2626;font-weight:600" if v<0 else ""
-                return ""
-            def _wl_ema(v):
-                if v=="Above": return "color:#16a34a;font-weight:600"
-                if v=="Below": return "color:#dc2626;font-weight:600"
-                return ""
-            def _wl_rsi(v):
-                if isinstance(v,float):
-                    if v>70: return "color:#dc2626"
-                    if v<30: return "color:#16a34a"
-                return ""
-
-            st.dataframe(
-                wl_df.style
-                    .applymap(_wl_chg, subset=["Day %"])
-                    .applymap(_wl_ema, subset=["vs 200EMA"])
-                    .applymap(_wl_rsi, subset=["RSI"])
-                    .format({"Price":"₹{:,.2f}","Day %":"{:+.2f}%",
-                             "RSI":"{:.1f}","52w Pos %":"{:.1f}%"}, na_rep="—"),
-                use_container_width=True,
-                height=min(60+len(wl_df)*36, 520), hide_index=True
-            )
-
-            # Quick chart ─────────────────────────────────────────────────────
-            st.markdown("---")
-            wl_chart_sym = st.selectbox("Quick chart", st.session_state.watchlist, key="wl_chart")
-            if wl_chart_sym:
-                import urllib.parse as _wlup
-                _wl_p = _wlup.urlencode({
-                    "frameElementId":"wl_tv","symbol":wl_chart_sym,
-                    "interval":"D","timezone":"Asia/Kolkata","theme":"light",
-                    "style":"1","locale":"en","toolbar_bg":"f8f9fb",
-                    "hide_side_toolbar":"0","allow_symbol_change":"1","withdateranges":"1",
-                })
-                st.components.v1.html(
-                    f'<!DOCTYPE html><html><head><meta charset="utf-8">'
-                    f'<style>html,body{{margin:0;padding:0;background:#fff;}}'
-                    f'iframe{{border:none;border-radius:8px;display:block;}}</style></head>'
-                    f'<body><iframe id="wl_tv" src="https://s.tradingview.com/widgetembed/?{_wl_p}"'
-                    f' width="100%" height="390" frameborder="0" scrolling="no"'
-                    f' allowtransparency="true" allowfullscreen></iframe></body></html>',
-                    height=400
-                )
+                    if to_remove:
+                        st.session_state.watchlist = [
+                            s for s in st.session_state.watchlist if s not in to_remove
+                        ]
+                        st.rerun()
 
 
 # FOOTER
