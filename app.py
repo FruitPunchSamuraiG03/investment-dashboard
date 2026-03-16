@@ -64,7 +64,7 @@ st.markdown("""
 
     /* ── Push main content below the sticky ticker bar ── */
     [data-testid="stAppViewContainer"] > .main > .block-container {
-        padding-top: 160px !important;
+        padding-top: 118px !important;
     }
 
     /* ── Sticky ticker bar ── */
@@ -609,8 +609,8 @@ st.markdown("---")
 # =============================================================================
 # SECTION TABS
 # =============================================================================
-tab_tv, tab_technicals, tab_breadth, tab_news, tab_calendar, tab_twitter, tab_holdings, tab_research, tab_intel = st.tabs([
-    "📈 Chart",
+tab_overview, tab_technicals, tab_breadth, tab_news, tab_calendar, tab_twitter, tab_holdings, tab_research = st.tabs([
+    "📊 Overview",
     "🔬 Technicals",
     "🌡️ Breadth",
     "📰 News",
@@ -618,7 +618,6 @@ tab_tv, tab_technicals, tab_breadth, tab_news, tab_calendar, tab_twitter, tab_ho
     "📬 Channels",
     "💼 Portfolio",
     "🔍 Research",
-    "📊 Market Intel",
 ])
 
 # =============================================================================
@@ -1006,41 +1005,36 @@ with tab_calendar:
 # =============================================================================
 # TAB 1 (was 6) — Chart
 # =============================================================================
-with tab_tv:
-    st.markdown("#### 📈 Chart")
-    st.caption("Full-featured TradingView chart. Enter any ticker — NSE stocks: HDFCBANK, RELIANCE. Global: AAPL, MSFT.")
+with tab_overview:
+    ov_chart, ov_fii, ov_deals, ov_events, ov_watchlist = st.tabs([
+        "📈 Chart",
+        "🏦 FII / DII",
+        "📋 Block Deals",
+        "📆 Corp Events",
+        "👁️ Watchlist",
+    ])
 
-    tv2_sym = st.text_input(
-        "Symbol", value="HDFCBANK", key="tv2_sym",
-        help="For NSE stocks use just the ticker e.g. HDFCBANK, RELIANCE. Global: AAPL, MSFT."
-    )
-    import urllib.parse as _ul
-    tv2_params = _ul.urlencode({
-        "symbol": tv2_sym,
-        "interval": "D",
-        "timezone": "Asia/Kolkata",
-        "theme": "light",
-        "style": "1",
-        "locale": "en",
-        "toolbar_bg": "#f8f9fb",
-        "enable_publishing": "false",
-        "withdateranges": "true",
-        "hide_side_toolbar": "false",
-        "allow_symbol_change": "true",
-        "studies": "RSI@tv-basicstudies,MACD@tv-basicstudies,BB@tv-basicstudies",
-        "show_popup_button": "true",
-        "save_image": "false",
-    })
-    tv2_iframe_url = f"https://s.tradingview.com/widgetembed/?{tv2_params}"
-    tv2_html = f'''
-    <iframe
-      src="{tv2_iframe_url}"
-      style="width:100%;height:690px;border:none;display:block;border-radius:8px;"
-      allowtransparency="true"
-      scrolling="no"
-      frameborder="0">
-    </iframe>'''
-    st.components.v1.html(tv2_html, height=700)
+    with ov_chart:
+        st.markdown("#### 📈 Chart")
+        st.caption("Full-featured TradingView chart. Enter any ticker — NSE stocks: HDFCBANK, RELIANCE. Global: AAPL, MSFT.")
+        tv2_sym = st.text_input(
+            "Symbol", value="HDFCBANK", key="tv2_sym",
+            help="For NSE stocks use just the ticker e.g. HDFCBANK, RELIANCE. Global: AAPL, MSFT."
+        )
+        import urllib.parse as _ul
+        tv2_params = _ul.urlencode({
+            "symbol": tv2_sym, "interval": "D", "timezone": "Asia/Kolkata",
+            "theme": "light", "style": "1", "locale": "en", "toolbar_bg": "#f8f9fb",
+            "enable_publishing": "false", "withdateranges": "true",
+            "hide_side_toolbar": "false", "allow_symbol_change": "true",
+            "studies": "RSI@tv-basicstudies,MACD@tv-basicstudies,BB@tv-basicstudies",
+            "show_popup_button": "true", "save_image": "false",
+        })
+        tv2_iframe_url = f"https://s.tradingview.com/widgetembed/?{tv2_params}"
+        tv2_html = f'''<iframe src="{tv2_iframe_url}"
+          style="width:100%;height:690px;border:none;display:block;border-radius:8px;"
+          allowtransparency="true" scrolling="no" frameborder="0"></iframe>'''
+        st.components.v1.html(tv2_html, height=700)
 
 
 # =============================================================================
@@ -2486,14 +2480,15 @@ st.components.v1.html("""
 # TAB — MARKET INTEL  (FII/DII · Block Deals · Corp Events · Watchlist)
 # Consolidated from 4 tabs into one for a cleaner nav bar.
 # =============================================================================
-with tab_intel:
+# The FII/DII, Deals, Events, Watchlist sub-tabs live inside tab_overview above.
+# Map the old variable names to the new ones so all the code below still works.
+intel_fii       = ov_fii
+intel_deals     = ov_deals
+intel_events    = ov_events
+intel_watchlist = ov_watchlist
 
-    intel_fii, intel_deals, intel_events, intel_watchlist = st.tabs([
-        "🏦 FII / DII Flows",
-        "📋 Block & Bulk Deals",
-        "📆 Corporate Events",
-        "👁️ Watchlist",
-    ])
+with tab_overview:
+    pass  # all overview content is inside the sub-tabs defined above
 
     # =========================================================================
     # FII / DII FLOWS
