@@ -63,9 +63,8 @@ st.markdown("""
     [data-testid="stHeader"] { background-color: #ffffff; border-bottom: 1px solid #e2e8f0; }
 
     /* ── Push main content below the sticky ticker bar ── */
-    /* FIXED: Increased padding-top to 125px to clear the 104px ticker bar + add breathing room */
     [data-testid="stAppViewContainer"] > .main > .block-container {
-        padding-top: 125px !important;
+        padding-top: 160px !important;
     }
 
     /* ── Sticky ticker bar ── */
@@ -186,20 +185,28 @@ st.markdown("""
     .news-meta { font-size: 0.7rem; color: #94a3b8; margin-top: 3px; font-family: 'JetBrains Mono', monospace; }
 
     /* ── Tabs ── */
-    /* Sticky tab bar: sits just below the ticker bar (top: 104px = 58px header + 46px ticker) */
     .stTabs [data-baseweb="tab-list"] {
         background: #ffffff;
         gap: 6px;
         border-radius: 0;
         padding: 6px 8px;
-        position: sticky;
-        top: 104px;
-        z-index: 990;
         border-bottom: 2px solid #e2e8f0;
         box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     }
     .stTabs [data-baseweb="tab"] { background: transparent; border: none; border-radius: 6px; color: #64748b; font-size: 0.82rem; font-family: 'Inter', sans-serif; padding: 6px 18px !important; }
     .stTabs [aria-selected="true"] { background: #f0f5ff !important; color: #0057b8 !important; font-weight: 600; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+    /* Sticky tab bar — JS handles the actual sticking */
+    /* padding-top handled by the base rule above */
+    /* Class added by JS when tab bar is stuck */
+    .tab-bar-stuck {
+        position: fixed !important;
+        top: 104px !important;
+        left: 0 !important;
+        right: 0 !important;
+        z-index: 989 !important;
+        background: #ffffff !important;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.08) !important;
+    }
 
     /* ── Buttons ── */
     .stButton button { background: #ffffff; border: 1px solid #e2e8f0; color: #475569; font-size: 0.78rem; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
@@ -401,8 +408,8 @@ def fetch_rss(url):
                 "pub_dt":   pub_dt,          # sortable datetime object
                 "source":   feed.feed.get("title", url),
             })
-        # Sort newest-first within each feed safely
-        items.sort(key=lambda x: x["pub_dt"].timestamp() if x.get("pub_dt") else 0.0, reverse=True)
+        # Sort newest-first within each feed
+        items.sort(key=lambda x: x["pub_dt"] or datetime.min, reverse=True)
         return items
     except Exception:
         return []
@@ -602,7 +609,7 @@ st.markdown("---")
 # =============================================================================
 # SECTION TABS
 # =============================================================================
-tab_tv, tab_technicals, tab_breadth, tab_news, tab_calendar, tab_twitter, tab_holdings, tab_research = st.tabs([
+tab_tv, tab_technicals, tab_breadth, tab_news, tab_calendar, tab_twitter, tab_holdings, tab_research, tab_intel = st.tabs([
     "📈 Chart",
     "🔬 Technicals",
     "🌡️ Breadth",
@@ -611,6 +618,7 @@ tab_tv, tab_technicals, tab_breadth, tab_news, tab_calendar, tab_twitter, tab_ho
     "📬 Channels",
     "💼 Portfolio",
     "🔍 Research",
+    "📊 Market Intel",
 ])
 
 # =============================================================================
@@ -826,7 +834,7 @@ with tab_breadth:
         return "color: #94a3b8"
 
     st.dataframe(
-        display_df[["Ticker", "Status"]].style.map(color_status, subset=["Status"]),
+        display_df[["Ticker", "Status"]].style.applymap(color_status, subset=["Status"]),
         use_container_width=True, height=420, hide_index=True
     )
 
@@ -869,7 +877,7 @@ with tab_news:
                 for item in fetch_rss(url):
                     item["source"] = src_name
                     all_global.append(item)
-        all_global.sort(key=lambda x: x.get("pub_dt").timestamp() if x.get("pub_dt") else 0.0, reverse=True)
+        all_global.sort(key=lambda x: x.get("pub_dt") or datetime.min, reverse=True)
         render_news_items(all_global[:40])
 
     with news_tab2:
@@ -888,7 +896,7 @@ with tab_news:
                     for item in fetch_rss(url):
                         item["source"] = label
                         all_user.append(item)
-            all_user.sort(key=lambda x: x.get("pub_dt").timestamp() if x.get("pub_dt") else 0.0, reverse=True)
+            all_user.sort(key=lambda x: x.get("pub_dt") or datetime.min, reverse=True)
             if all_user:
                 render_news_items(all_user[:30])
             else:
@@ -918,36 +926,40 @@ with tab_calendar:
         "**update it** by editing `events` under `# ── CALENDAR DATA ──` in `app.py`."
     )
 
+    # ── CALENDAR DATA ── (Update this list manually when dates change)
+    # Source: federalreserve.gov (FOMC), rbi.org.in (RBI MPC), ecb.europa.eu (ECB)
+    # All times in IST. ✅ = already announced/passed. Upcoming = still relevant.
     events = [
         # ── Already occurred in 2026 ──────────────────────────────────────────
         {"Date": "28 Jan 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision (held at 3.50–3.75%)", "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "✅ Done"},
-        {"Date": "06 Feb 2026", "Time": "10:00 IST", "Event": "RBI MPC Decision (held at 5.25%)",             "Country": "🇮🇳 India", "Impact": "High",   "Status": "✅ Done"},
-        {"Date": "12 Feb 2026", "Time": "19:00 IST", "Event": "US CPI Inflation (Jan 2026)",                  "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "✅ Done"},
-        {"Date": "06 Mar 2026", "Time": "18:30 IST", "Event": "US Non-Farm Payrolls (Feb 2026)",              "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "✅ Done"},
-        {"Date": "12 Mar 2026", "Time": "19:00 IST", "Event": "US CPI Inflation (Feb 2026)",                  "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "✅ Done"},
+        {"Date": "06 Feb 2026", "Time": "10:00 IST", "Event": "RBI MPC Decision (held at 5.25%)",           "Country": "🇮🇳 India", "Impact": "High",   "Status": "✅ Done"},
+        {"Date": "12 Feb 2026", "Time": "19:00 IST", "Event": "US CPI Inflation (Jan 2026)",                "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "✅ Done"},
+        {"Date": "06 Mar 2026", "Time": "18:30 IST", "Event": "US Non-Farm Payrolls (Feb 2026)",            "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "✅ Done"},
+        {"Date": "12 Mar 2026", "Time": "19:00 IST", "Event": "US CPI Inflation (Feb 2026)",                "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "✅ Done"},
         # ── Upcoming ──────────────────────────────────────────────────────────
         {"Date": "19 Mar 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision + SEP Projections",   "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
-        {"Date": "20 Mar 2026", "Time": "18:30 IST", "Event": "US PCE Price Index (Feb 2026)",                "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
-        {"Date": "27 Mar 2026", "Time": "18:30 IST", "Event": "US GDP Q4 2025 (Final)",                       "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
-        {"Date": "03 Apr 2026", "Time": "18:30 IST", "Event": "US Non-Farm Payrolls (Mar 2026)",              "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
-        {"Date": "08 Apr 2026", "Time": "10:00 IST", "Event": "RBI MPC Decision",                           "Country": "🇮🇳 India", "Impact": "High",   "Status": "🔜 Upcoming"},
-        {"Date": "10 Apr 2026", "Time": "19:00 IST", "Event": "US CPI Inflation (Mar 2026)",                  "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
-        {"Date": "17 Apr 2026", "Time": "19:15 IST", "Event": "ECB Rate Decision",                           "Country": "🇪🇺 EU",    "Impact": "High",   "Status": "🔜 Upcoming"},
-        {"Date": "30 Apr 2026", "Time": "20:00 IST", "Event": "US GDP Q1 2026 (Advance Estimate)",          "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
-        {"Date": "07 May 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision",                       "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
-        {"Date": "08 May 2026", "Time": "18:30 IST", "Event": "US Non-Farm Payrolls (Apr 2026)",              "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
-        {"Date": "13 May 2026", "Time": "19:00 IST", "Event": "US CPI Inflation (Apr 2026)",                  "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
-        {"Date": "05 Jun 2026", "Time": "19:15 IST", "Event": "ECB Rate Decision",                           "Country": "🇪🇺 EU",    "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "20 Mar 2026", "Time": "18:30 IST", "Event": "US PCE Price Index (Feb 2026)",              "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "27 Mar 2026", "Time": "18:30 IST", "Event": "US GDP Q4 2025 (Final)",                    "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "03 Apr 2026", "Time": "18:30 IST", "Event": "US Non-Farm Payrolls (Mar 2026)",            "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "08 Apr 2026", "Time": "10:00 IST", "Event": "RBI MPC Decision",                          "Country": "🇮🇳 India", "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "10 Apr 2026", "Time": "19:00 IST", "Event": "US CPI Inflation (Mar 2026)",                "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "17 Apr 2026", "Time": "19:15 IST", "Event": "ECB Rate Decision",                         "Country": "🇪🇺 EU",    "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "30 Apr 2026", "Time": "20:00 IST", "Event": "US GDP Q1 2026 (Advance Estimate)",         "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "07 May 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision",                     "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "08 May 2026", "Time": "18:30 IST", "Event": "US Non-Farm Payrolls (Apr 2026)",            "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "13 May 2026", "Time": "19:00 IST", "Event": "US CPI Inflation (Apr 2026)",                "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "05 Jun 2026", "Time": "19:15 IST", "Event": "ECB Rate Decision",                         "Country": "🇪🇺 EU",    "Impact": "High",   "Status": "🔜 Upcoming"},
         {"Date": "Jun 2026",    "Time": "10:00 IST", "Event": "RBI MPC Decision (date TBC)",               "Country": "🇮🇳 India", "Impact": "High",   "Status": "🔜 Upcoming"},
         {"Date": "18 Jun 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision + SEP Projections",   "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
-        {"Date": "30 Jul 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision",                       "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "30 Jul 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision",                     "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
         {"Date": "Aug 2026",    "Time": "10:00 IST", "Event": "RBI MPC Decision (date TBC)",               "Country": "🇮🇳 India", "Impact": "High",   "Status": "🔜 Upcoming"},
         {"Date": "17 Sep 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision + SEP Projections",   "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
         {"Date": "Oct 2026",    "Time": "10:00 IST", "Event": "RBI MPC Decision (date TBC)",               "Country": "🇮🇳 India", "Impact": "High",   "Status": "🔜 Upcoming"},
-        {"Date": "29 Oct 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision",                       "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "29 Oct 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision",                     "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
         {"Date": "10 Dec 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision + SEP Projections",   "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
         {"Date": "Dec 2026",    "Time": "10:00 IST", "Event": "RBI MPC Decision (date TBC)",               "Country": "🇮🇳 India", "Impact": "High",   "Status": "🔜 Upcoming"},
     ]
+    # ── END CALENDAR DATA ──
 
     cal_df = pd.DataFrame(events)
 
@@ -977,8 +989,8 @@ with tab_calendar:
     ]
     st.dataframe(
         filtered_cal.style
-            .map(impact_color, subset=["Impact"])
-            .map(status_color, subset=["Status"]),
+            .applymap(impact_color, subset=["Impact"])
+            .applymap(status_color, subset=["Status"]),
         use_container_width=True, height=500, hide_index=True
     )
 
@@ -1033,16 +1045,37 @@ with tab_tv:
 
 # =============================================================================
 # TAB 7 — Telegram Channels (via RSSHub mirror fallback chain)
+# Tries 6 public RSSHub mirrors in order. Stops at first one that responds.
+# No setup, no token, no admin access required.
+#
+# ┌─────────────────────────────────────────────────────────────────┐
+# │  TO ADD A NEW TELEGRAM CHANNEL:                                 │
+# │  1. Find the channel's username (the part after t.me/)          │
+# │  2. Add a new tuple to TELEGRAM_CHANNELS in this format:        │
+# │       ("Display Name", "username", "description")               │
+# │  3. Save and push to GitHub — done. No other changes needed.    │
+# └─────────────────────────────────────────────────────────────────┘
 # =============================================================================
 with tab_twitter:
     st.markdown("#### 📬 Channels — Telegram Market Feeds")
     st.caption("Posts fetched from public Telegram channels. Refreshes every 60 sec.")
 
+    # ══════════════════════════════════════════════════════════════
+    # ADD / REMOVE TELEGRAM CHANNELS HERE
+    # Format: ("Display Name", "telegram_username", "description")
     TELEGRAM_CHANNELS = [
         ("Beat The Street News",             "Beatthestreetnews", "Latest share market news"),
         ("Beat The Street Equity Research",  "btsreports",        "Research reports & books"),
+        # ── Add more channels below this line ─────────────────────
+        # ("Zerodha Varsity",   "zerodhaonline",  "Market education & insights"),
+        # ("Moneycontrol News", "moneycontrol",   "Business & markets coverage"),
+        # ("NSE India",         "NSEIndia",       "Official NSE announcements"),
     ]
+    # ══════════════════════════════════════════════════════════════
 
+    # ── Public RSSHub mirror list (tried in order, stops at first success) ────
+    # If all fail, the app shows a clean error with direct Telegram links.
+    # Update this list if mirrors go offline: https://docs.rsshub.app/instances
     RSSHUB_MIRRORS = [
         "https://rsshub.rssforever.com",
         "https://rss.fatpandadev.com",
@@ -1057,6 +1090,10 @@ with tab_twitter:
 
     @st.cache_data(ttl=60)
     def fetch_telegram_channel(channel_username):
+        """
+        Try each RSSHub mirror in order. Return (posts, mirror_used, error).
+        Posts are returned on first mirror that gives a non-empty feed.
+        """
         import re as _re
         last_error = "All mirrors failed or returned empty feeds."
 
@@ -1092,15 +1129,16 @@ with tab_twitter:
                         "published": pub_str,
                     })
 
-                return posts, mirror, None
+                return posts, mirror, None   # success
 
             except Exception as e:
                 last_error = f"{mirror}: {e}"
                 continue
 
-        return [], None, last_error
+        return [], None, last_error   # all mirrors failed
 
     def build_channel_html(posts, err, handle, display_name, desc, mirror_used):
+        """Build a self-contained scrollable HTML block for one Telegram channel."""
         if err:
             body = f"""
             <div style="padding:20px 16px;background:#fffbeb;border:1px solid #fde68a;
@@ -1154,16 +1192,70 @@ with tab_twitter:
         return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
 <style>
   * {{ box-sizing:border-box; margin:0; padding:0; }}
-  html, body {{ background: #f4f6f9; font-family: Inter, sans-serif; height: 100%; }}
-  .channel-wrap {{ display: flex; flex-direction: column; height: 100%; background: #f4f6f9; }}
-  .channel-header {{ position: sticky; top: 0; z-index: 10; background: #ffffff; border-bottom: 2px solid #e2e8f0; padding: 10px 14px 8px 14px; flex-shrink: 0; }}
-  .ch-title {{ font-size: .9rem; font-weight: 700; color: #1e293b; display: flex; align-items: center; justify-content: space-between; gap: 8px; }}
-  .ch-handle {{ font-weight: 400; color: #94a3b8; font-size: .75rem; font-family: 'JetBrains Mono', monospace; }}
-  .ch-open {{ display: inline-block; background: #0057b8; color: #fff !important; padding: 3px 11px; border-radius: 5px; font-size: .72rem; font-weight: 600; text-decoration: none; white-space: nowrap; flex-shrink: 0; }}
-  .ch-desc {{ font-size: .7rem; color: #64748b; margin-top: 2px; }}
-  .channel-body {{ flex: 1; overflow-y: auto; padding: 10px 12px 16px 12px; scrollbar-width: thin; scrollbar-color: #cbd5e0 transparent; }}
+  html, body {{
+    background: #f4f6f9;
+    font-family: Inter, sans-serif;
+    height: 100%;
+  }}
+  .channel-wrap {{
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: #f4f6f9;
+  }}
+  .channel-header {{
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: #ffffff;
+    border-bottom: 2px solid #e2e8f0;
+    padding: 10px 14px 8px 14px;
+    flex-shrink: 0;
+  }}
+  .ch-title {{
+    font-size: .9rem;
+    font-weight: 700;
+    color: #1e293b;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }}
+  .ch-handle {{
+    font-weight: 400;
+    color: #94a3b8;
+    font-size: .75rem;
+    font-family: 'JetBrains Mono', monospace;
+  }}
+  .ch-open {{
+    display: inline-block;
+    background: #0057b8;
+    color: #fff !important;
+    padding: 3px 11px;
+    border-radius: 5px;
+    font-size: .72rem;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }}
+  .ch-desc {{
+    font-size: .7rem;
+    color: #64748b;
+    margin-top: 2px;
+  }}
+  .channel-body {{
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 12px 16px 12px;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e0 transparent;
+  }}
   .channel-body::-webkit-scrollbar {{ width: 5px; }}
-  .channel-body::-webkit-scrollbar-thumb {{ background: #cbd5e0; border-radius: 4px; }}
+  .channel-body::-webkit-scrollbar-thumb {{
+    background: #cbd5e0;
+    border-radius: 4px;
+  }}
 </style>
 </head><body>
 <div class="channel-wrap">
@@ -1183,17 +1275,19 @@ with tab_twitter:
     if not TELEGRAM_CHANNELS:
         st.info("No channels configured. Add entries to `TELEGRAM_CHANNELS` in `app.py`.")
     else:
+        # Fetch all channels first (parallel-ish — each call is cached)
         channel_data = []
         for (display_name, handle, desc) in TELEGRAM_CHANNELS:
             with st.spinner(f"Fetching @{handle}…"):
                 posts, mirror_used, err = fetch_telegram_channel(handle)
             channel_data.append((display_name, handle, desc, posts, err, mirror_used))
 
+        # Render as equal-width columns, each independently scrollable
         cols = st.columns(len(channel_data))
         if not isinstance(cols, list):
             cols = [cols]
 
-        SCROLL_HEIGHT = 820
+        SCROLL_HEIGHT = 820  # px — tall enough to show ~8 posts, scrollable beyond
 
         for col, (display_name, handle, desc, posts, err, mirror_used) in zip(cols, channel_data):
             with col:
@@ -1214,10 +1308,18 @@ with tab_twitter:
 
 # =============================================================================
 # TAB 8 — Portfolio (Zerodha Holdings Upload)
+# Upload the holdings XLSX/CSV from Zerodha Console → Reports → Holdings.
+# The file is parsed automatically — no API key, no login needed.
+#
+# ZERODHA FILE FORMAT (auto-detected):
+#   Row 22 = headers: Symbol, ISIN, Sector, Quantity Available, ...
+#   Row 23+ = holdings data
+#   Rows 14-17 = summary: Invested Value, Present Value, Unrealized P&L
 # =============================================================================
 with tab_holdings:
     st.markdown("#### 💼 Portfolio — Holdings")
 
+    # ── How to download the file ───────────────────────────────────────────────
     with st.expander("ℹ️ How to get your holdings file from Zerodha"):
         st.caption(
             "1. Open **[console.zerodha.com](https://console.zerodha.com)** → log in\n"
@@ -1227,6 +1329,7 @@ with tab_holdings:
             "**Tip:** Do this once a day after market close for accurate P&L."
         )
 
+    # ── File uploader ─────────────────────────────────────────────────────────
     uploaded_file = st.file_uploader(
         "Upload your Zerodha holdings file",
         type=["xlsx", "csv"],
@@ -1235,7 +1338,13 @@ with tab_holdings:
         help="Download from Zerodha Console → Portfolio → Holdings → Download"
     )
 
+    # ── Parser ────────────────────────────────────────────────────────────────
     def parse_zerodha_holdings(file_obj, filename):
+        """
+        Parse Zerodha holdings XLSX or CSV export.
+        Returns (df_holdings, summary_dict, error_str).
+        Summary keys: invested, present, pnl, pnl_pct
+        """
         import re as _re
         try:
             if filename.endswith('.csv'):
@@ -1243,6 +1352,7 @@ with tab_holdings:
             else:
                 raw = pd.read_excel(file_obj, header=None)
 
+            # ── Find summary values ────────────────────────────────────────────
             summary = {"invested": 0, "present": 0, "pnl": 0, "pnl_pct": 0}
             summary_map = {
                 "Invested Value":      "invested",
@@ -1254,6 +1364,7 @@ with tab_holdings:
                 for col in row:
                     if str(col).strip() in summary_map:
                         key = summary_map[str(col).strip()]
+                        # value is in the next non-null cell
                         vals = [v for v in row if str(v) not in ("nan","None","")]
                         if len(vals) >= 2:
                             try:
@@ -1261,6 +1372,7 @@ with tab_holdings:
                             except Exception:
                                 pass
 
+            # ── Find header row (contains "Symbol" and "Sector") ───────────────
             header_row = None
             for i, row in raw.iterrows():
                 row_vals = [str(v).strip() for v in row]
@@ -1271,13 +1383,16 @@ with tab_holdings:
             if header_row is None:
                 return None, summary, "Could not find header row with 'Symbol' and 'Sector'."
 
-            df = pd.read_excel(file_obj, header=header_row) if filename.endswith('.xlsx') else pd.read_csv(file_obj, header=header_row)
+            # ── Extract holdings data ──────────────────────────────────────────
+            df = pd.read_excel(file_obj, header=header_row) if filename.endswith('.xlsx')                  else pd.read_csv(file_obj, header=header_row)
 
+            # Keep only rows that have a Symbol value (non-null, non-header)
             df = df[df["Symbol"].notna()].copy()
             df = df[df["Symbol"].astype(str).str.strip() != ""]
             df = df[~df["Symbol"].astype(str).str.lower().isin(["symbol","nan"])]
             df = df.reset_index(drop=True)
 
+            # ── Rename columns to standard names ──────────────────────────────
             col_map = {
                 "Symbol":                    "Symbol",
                 "ISIN":                      "ISIN",
@@ -1290,16 +1405,19 @@ with tab_holdings:
             }
             df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
 
+            # ── Coerce numeric columns ─────────────────────────────────────────
             for col in ["Qty", "Avg Price", "Prev Close", "Total P&L", "Return %"]:
                 if col in df.columns:
                     df[col] = pd.to_numeric(
                         df[col].astype(str).str.replace(",",""), errors="coerce"
                     )
 
+            # ── Derive computed columns ────────────────────────────────────────
             df["Invested"]  = (df["Avg Price"] * df["Qty"]).round(2)
             df["Cur Value"] = (df["Prev Close"] * df["Qty"]).round(2)
-            df["Day P&L"]   = 0.0
+            df["Day P&L"]   = 0.0   # not available in static export
 
+            # ── Filter zero-qty rows ───────────────────────────────────────────
             df = df[df["Qty"] > 0].copy()
 
             return df, summary, None
@@ -1307,8 +1425,10 @@ with tab_holdings:
         except Exception as e:
             return None, {}, str(e)
 
+    # ── Fetch live LTP for a batch of symbols ─────────────────────────────────
     @st.cache_data(ttl=60)
     def fetch_live_ltp(symbols_tuple):
+        """Fetch live LTP for a tuple of NSE symbols via yfinance."""
         tickers = [f"{s}.NS" for s in symbols_tuple]
         live = {}
         try:
@@ -1339,11 +1459,13 @@ with tab_holdings:
         url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={symbol}.NS&region=IN&lang=en-IN"
         return fetch_rss(url)
 
+    # ── Main rendering ────────────────────────────────────────────────────────
     if uploaded_file is None:
         st.info(
             "📂 **Upload your Zerodha holdings file above** to see your portfolio.\n\n"
             "Download it from: **Zerodha Console → Portfolio → Holdings → Download (XLSX)**"
         )
+        # Show sample of what the dashboard looks like
         st.markdown("---")
         st.markdown("**Once uploaded, you'll see:**")
         c1, c2, c3 = st.columns(3)
@@ -1360,16 +1482,19 @@ with tab_holdings:
             st.error(f"❌ Could not parse file: {parse_err}")
             st.caption("Make sure you're uploading the Zerodha Holdings XLSX/CSV file.")
         else:
+            # ── Fetch live prices ──────────────────────────────────────────────
             all_symbols = tuple(df_h["Symbol"].tolist())
             with st.spinner("Fetching live prices…"):
                 live_prices = fetch_live_ltp(all_symbols)
 
+            # Update LTP and Day P&L where live data is available
             def get_ltp(sym):
                 return live_prices.get(sym, {}).get("ltp", df_h.loc[df_h["Symbol"]==sym, "Prev Close"].iloc[0])
 
             df_h["LTP"] = df_h["Symbol"].apply(get_ltp)
             df_h["LTP"] = pd.to_numeric(df_h["LTP"], errors="coerce")
 
+            # Recalculate with live LTP
             df_h["Cur Value"]  = (df_h["LTP"] * df_h["Qty"]).round(2)
             df_h["Total P&L"]  = (df_h["Cur Value"] - df_h["Invested"]).round(2)
             df_h["Return %"]   = ((df_h["Total P&L"] / df_h["Invested"]) * 100).round(2)
@@ -1379,7 +1504,10 @@ with tab_holdings:
             )
 
             df_h = df_h.sort_values("Cur Value", ascending=False).reset_index(drop=True)
+            # Store symbols for Corporate Events tab filter
+            st.session_state["portfolio_symbols"] = df_h["Symbol"].tolist()
 
+            # ── Summary Metrics ────────────────────────────────────────────────
             total_invested = df_h["Invested"].sum()
             total_cur      = df_h["Cur Value"].sum()
             total_pnl      = df_h["Total P&L"].sum()
@@ -1390,13 +1518,16 @@ with tab_holdings:
 
             m1, m2, m3, m4, m5 = st.columns(5)
             m1.metric("Invested",       f"₹{total_invested:,.0f}")
-            m2.metric("Current Value",  f"₹{total_cur:,.0f}", delta=f"₹{total_pnl:+,.0f}")
-            m3.metric("Total P&L",      f"₹{total_pnl:+,.0f}", delta=f"{total_ret_pct:+.2f}%")
+            m2.metric("Current Value",  f"₹{total_cur:,.0f}",
+                      delta=f"₹{total_pnl:+,.0f}")
+            m3.metric("Total P&L",      f"₹{total_pnl:+,.0f}",
+                      delta=f"{total_ret_pct:+.2f}%")
             m4.metric("Day P&L",        f"₹{total_day:+,.0f}")
             m5.metric("Holdings",       str(len(df_h)))
 
             st.markdown("---")
 
+            # ── Holdings Table ─────────────────────────────────────────────────
             st.markdown("##### Holdings")
 
             def _col_color(val):
@@ -1409,7 +1540,7 @@ with tab_holdings:
                             "Invested","Cur Value","Day P&L","Total P&L","Return %"]
             styled = (
                 df_h[display_cols].style
-                .map(_col_color, subset=["Day P&L","Total P&L","Return %"])
+                .applymap(_col_color, subset=["Day P&L","Total P&L","Return %"])
                 .format({
                     "Avg Price":  "₹{:,.2f}",
                     "LTP":        "₹{:,.2f}",
@@ -1420,9 +1551,12 @@ with tab_holdings:
                     "Return %":   "{:+.2f}%",
                 })
             )
-            st.dataframe(styled, use_container_width=True, height=min(60 + len(df_h)*36, 560), hide_index=True)
+            st.dataframe(styled, use_container_width=True,
+                         height=min(60 + len(df_h)*36, 560), hide_index=True)
 
             st.markdown("---")
+
+            # ── Sector Allocation ──────────────────────────────────────────────
             st.markdown("##### Sector Allocation")
 
             sector_df = (
@@ -1484,6 +1618,8 @@ with tab_holdings:
                              use_container_width=True, height=380, hide_index=True)
 
             st.markdown("---")
+
+            # ── Top Gainers & Losers ───────────────────────────────────────────
             st.markdown("##### Top Gainers & Losers")
             gl1, gl2 = st.columns(2)
             top_gain = df_h.nlargest(5, "Return %")[["Symbol","Sector","Return %","Total P&L"]]
@@ -1493,7 +1629,7 @@ with tab_holdings:
                 st.markdown("🟢 **Top Gainers**")
                 st.dataframe(
                     top_gain.style
-                    .map(_col_color, subset=["Return %","Total P&L"])
+                    .applymap(_col_color, subset=["Return %","Total P&L"])
                     .format({"Return %": "{:+.2f}%", "Total P&L": "₹{:+,.0f}"}),
                     use_container_width=True, hide_index=True, height=220
                 )
@@ -1501,13 +1637,22 @@ with tab_holdings:
                 st.markdown("🔴 **Top Losers**")
                 st.dataframe(
                     top_loss.style
-                    .map(_col_color, subset=["Return %","Total P&L"])
+                    .applymap(_col_color, subset=["Return %","Total P&L"])
                     .format({"Return %": "{:+.2f}%", "Total P&L": "₹{:+,.0f}"}),
                     use_container_width=True, hide_index=True, height=220
                 )
 
             st.markdown("---")
-            st.markdown("##### 🚨 Red Flags & Signals")
+
+            st.markdown("---")
+
+            # ================================================================
+            # RED FLAGS & BUY/HOLD/SELL SIGNALS
+            # Technical: RSI, MACD, 200 EMA, 50 EMA, Bollinger, 52w position
+            # Fundamental: P/E, P/B, Debt/Equity, ROE, profit margin,
+            #              current ratio, EPS growth, revenue growth
+            # ================================================================
+            st.markdown("##### \U0001f6a8 Red Flags & Signals")
             st.caption("Technical + Fundamental screening for all holdings. Not financial advice.")
 
             @st.cache_data(ttl=3600)
@@ -1584,40 +1729,40 @@ with tab_holdings:
 
             def score_and_flags(tech, fund, ret_pct, pledge_pct):
                 score = 0
-                tf = []
-                ff = []
+                tf = []   # technical flags
+                ff = []   # fundamental flags
 
                 if tech:
                     if tech["above_200"]:
                         score += 2
                     else:
-                        score -= 2; tf.append("🔴 Below 200 EMA — long-term downtrend")
+                        score -= 2; tf.append("\U0001f534 Below 200 EMA \u2014 long-term downtrend")
                     if tech["above_50"]:
                         score += 1
                     else:
-                        score -= 1; tf.append("🟡 Below 50 EMA — medium-term downtrend")
+                        score -= 1; tf.append("\U0001f7e1 Below 50 EMA \u2014 medium-term downtrend")
                     if tech["rsi"] < 35:
-                        score += 2; tf.append(f"🟢 RSI oversold ({tech['rsi']}) — potential bounce zone")
+                        score += 2; tf.append(f"\U0001f7e2 RSI oversold ({tech['rsi']}) \u2014 potential bounce zone")
                     elif tech["rsi"] > 72:
-                        score -= 2; tf.append(f"🔴 RSI overbought ({tech['rsi']}) — caution on new longs")
+                        score -= 2; tf.append(f"\U0001f534 RSI overbought ({tech['rsi']}) \u2014 caution on new longs")
                     if tech["macd_bull"]:
-                        score += 2; tf.append("🟢 MACD bullish crossover — momentum shifting up")
+                        score += 2; tf.append("\U0001f7e2 MACD bullish crossover \u2014 momentum shifting up")
                     elif tech["macd_bear"]:
-                        score -= 2; tf.append("🔴 MACD bearish crossover — momentum shifting down")
+                        score -= 2; tf.append("\U0001f534 MACD bearish crossover \u2014 momentum shifting down")
                     elif tech["macd_pos"]:
                         score += 1
                     else:
                         score -= 1
                     if tech["above_bb"]:
-                        score -= 1; tf.append("🟡 Above upper Bollinger Band — overextended")
+                        score -= 1; tf.append("\U0001f7e1 Above upper Bollinger Band \u2014 overextended")
                     elif tech["below_bb"]:
-                        score += 1; tf.append("🟢 Below lower Bollinger Band — potential reversal zone")
+                        score += 1; tf.append("\U0001f7e2 Below lower Bollinger Band \u2014 potential reversal zone")
                     if tech["w52_pos"] > 90:
-                        tf.append(f"🟡 Near 52w high ({tech['w52_pos']:.0f}% of range)")
+                        tf.append(f"\U0001f7e1 Near 52w high ({tech['w52_pos']:.0f}% of range)")
                     elif tech["w52_pos"] < 15:
-                        tf.append(f"🔴 Near 52w low ({tech['w52_pos']:.0f}% of range)")
+                        tf.append(f"\U0001f534 Near 52w low ({tech['w52_pos']:.0f}% of range)")
                     if tech["vol_surge"]:
-                        tf.append("🟢 Volume surge (20d avg > 1.5x 50d avg)")
+                        tf.append("\U0001f7e2 Volume surge (20d avg > 1.5x 50d avg)")
 
                 if fund:
                     pe = fund.get("pe"); pb = fund.get("pb"); de = fund.get("de")
@@ -1626,48 +1771,48 @@ with tab_holdings:
                     rev_g = fund.get("rev_growth"); beta = fund.get("beta")
                     if pe is not None:
                         if pe < 0:
-                            score -= 2; ff.append(f"🔴 Negative P/E ({pe:.1f}) — company in losses")
+                            score -= 2; ff.append(f"\U0001f534 Negative P/E ({pe:.1f}) \u2014 company in losses")
                         elif pe > 60:
-                            score -= 1; ff.append(f"🟡 High P/E ({pe:.1f}) — expensive valuation")
+                            score -= 1; ff.append(f"\U0001f7e1 High P/E ({pe:.1f}) \u2014 expensive valuation")
                         elif 0 < pe < 12:
-                            score += 1; ff.append(f"🟢 Low P/E ({pe:.1f}) — potentially undervalued")
+                            score += 1; ff.append(f"\U0001f7e2 Low P/E ({pe:.1f}) \u2014 potentially undervalued")
                     if pb is not None and pb > 8:
-                        score -= 1; ff.append(f"🟡 High P/B ({pb:.1f}) — expensive vs book value")
+                        score -= 1; ff.append(f"\U0001f7e1 High P/B ({pb:.1f}) \u2014 expensive vs book value")
                     if de is not None:
                         if de > 200:
-                            score -= 2; ff.append(f"🔴 High D/E ({de:.0f}%) — elevated debt burden")
+                            score -= 2; ff.append(f"\U0001f534 High D/E ({de:.0f}%) \u2014 elevated debt burden")
                         elif de > 100:
-                            score -= 1; ff.append(f"🟡 Moderate D/E ({de:.0f}%)")
+                            score -= 1; ff.append(f"\U0001f7e1 Moderate D/E ({de:.0f}%)")
                         elif de < 20:
-                            score += 1; ff.append(f"🟢 Low D/E ({de:.0f}%) — strong balance sheet")
+                            score += 1; ff.append(f"\U0001f7e2 Low D/E ({de:.0f}%) \u2014 strong balance sheet")
                     if roe is not None:
                         r = roe*100
-                        if r > 20:   score += 1; ff.append(f"🟢 Strong ROE ({r:.1f}%)")
-                        elif r < 5:  score -= 1; ff.append(f"🔴 Weak ROE ({r:.1f}%)")
+                        if r > 20:   score += 1; ff.append(f"\U0001f7e2 Strong ROE ({r:.1f}%)")
+                        elif r < 5:  score -= 1; ff.append(f"\U0001f534 Weak ROE ({r:.1f}%)")
                     if pm is not None:
                         p = pm*100
-                        if p < 0:    score -= 2; ff.append(f"🔴 Negative profit margin ({p:.1f}%)")
-                        elif p < 3:  score -= 1; ff.append(f"🟡 Very thin margin ({p:.1f}%)")
+                        if p < 0:    score -= 2; ff.append(f"\U0001f534 Negative profit margin ({p:.1f}%)")
+                        elif p < 3:  score -= 1; ff.append(f"\U0001f7e1 Very thin margin ({p:.1f}%)")
                     if cr is not None:
-                        if cr < 1.0: score -= 2; ff.append(f"🔴 Low current ratio ({cr:.2f}) — liquidity risk")
-                        elif cr < 1.5: score -= 1; ff.append(f"🟡 Tight current ratio ({cr:.2f})")
+                        if cr < 1.0: score -= 2; ff.append(f"\U0001f534 Low current ratio ({cr:.2f}) \u2014 liquidity risk")
+                        elif cr < 1.5: score -= 1; ff.append(f"\U0001f7e1 Tight current ratio ({cr:.2f})")
                     if eps_g is not None:
-                        if eps_g > 15:  score += 2; ff.append(f"🟢 Strong EPS growth ({eps_g:+.1f}%)")
-                        elif eps_g < -15: score -= 2; ff.append(f"🔴 EPS declining ({eps_g:+.1f}%)")
+                        if eps_g > 15:  score += 2; ff.append(f"\U0001f7e2 Strong EPS growth ({eps_g:+.1f}%)")
+                        elif eps_g < -15: score -= 2; ff.append(f"\U0001f534 EPS declining ({eps_g:+.1f}%)")
                     if rev_g is not None:
-                        if rev_g < -10:  score -= 1; ff.append(f"🔴 Revenue declining ({rev_g:+.1f}% YoY)")
-                        elif rev_g > 20: score += 1; ff.append(f"🟢 Strong revenue growth ({rev_g:+.1f}% YoY)")
+                        if rev_g < -10:  score -= 1; ff.append(f"\U0001f534 Revenue declining ({rev_g:+.1f}% YoY)")
+                        elif rev_g > 20: score += 1; ff.append(f"\U0001f7e2 Strong revenue growth ({rev_g:+.1f}% YoY)")
                     if beta is not None and beta > 2.0:
-                        ff.append(f"🟡 High beta ({beta:.2f}) — highly volatile stock")
+                        ff.append(f"\U0001f7e1 High beta ({beta:.2f}) \u2014 highly volatile stock")
 
                 if pledge_pct > 70:
-                    score -= 2; ff.append(f"🔴 Promoter pledge {pledge_pct:.0f}% — major red flag")
+                    score -= 2; ff.append(f"\U0001f534 Promoter pledge {pledge_pct:.0f}% \u2014 major red flag")
                 elif pledge_pct > 30:
-                    score -= 1; ff.append(f"🟡 Promoter pledge {pledge_pct:.0f}%")
+                    score -= 1; ff.append(f"\U0001f7e1 Promoter pledge {pledge_pct:.0f}%")
                 if ret_pct < -25:
-                    score -= 1; ff.append(f"🔴 Portfolio loss {ret_pct:+.1f}%")
+                    score -= 1; ff.append(f"\U0001f534 Portfolio loss {ret_pct:+.1f}%")
                 elif ret_pct > 100:
-                    ff.append(f"🟢 Multi-bagger {ret_pct:+.0f}% — consider partial profit booking")
+                    ff.append(f"\U0001f7e2 Multi-bagger {ret_pct:+.0f}% \u2014 consider partial profit booking")
 
                 label = "BUY" if score >= 5 else "SELL" if score <= -3 else "HOLD"
                 return label, score, tf, ff
@@ -1675,7 +1820,7 @@ with tab_holdings:
             rf_rows = []
             pledge_col_m = "Quantity Pledged (Margin)" if "Quantity Pledged (Margin)" in df_h.columns else None
             pledge_col_l = "Quantity Pledged (Loan)"   if "Quantity Pledged (Loan)"   in df_h.columns else None
-            prog = st.progress(0, text="Running analysis…")
+            prog = st.progress(0, text="Running analysis\u2026")
 
             for i, row in df_h.iterrows():
                 sym     = row["Symbol"]
@@ -1694,17 +1839,17 @@ with tab_holdings:
                     "Sector":     row.get("Sector",""),
                     "Signal":     label,
                     "Score":      score,
-                    "RSI":        tech["rsi"] if tech else "—",
-                    "vs 200EMA":  ("Above" if tech["above_200"] else "Below") if tech else "—",
-                    "P/E":        round(fund["pe"],1) if fund and fund.get("pe") else "—",
-                    "D/E %":      round(fund["de"],0) if fund and fund.get("de") else "—",
-                    "ROE %":      round(fund["roe"]*100,1) if fund and fund.get("roe") else "—",
-                    "EPS Gr.":    f"{fund['eps_growth']:+.1f}%" if fund and fund.get("eps_growth") else "—",
+                    "RSI":        tech["rsi"] if tech else "\u2014",
+                    "vs 200EMA":  ("Above" if tech["above_200"] else "Below") if tech else "\u2014",
+                    "P/E":        round(fund["pe"],1) if fund and fund.get("pe") else "\u2014",
+                    "D/E %":      round(fund["de"],0) if fund and fund.get("de") else "\u2014",
+                    "ROE %":      round(fund["roe"]*100,1) if fund and fund.get("roe") else "\u2014",
+                    "EPS Gr.":    f"{fund['eps_growth']:+.1f}%" if fund and fund.get("eps_growth") else "\u2014",
                     "Pledged%":   f"{pledge_pct:.0f}%",
-                    "Tech Flags": " | ".join(t_flags) if t_flags else "✅ Clean",
-                    "Fund Flags": " | ".join(f_flags) if f_flags else "✅ Clean",
+                    "Tech Flags": " | ".join(t_flags) if t_flags else "\u2705 Clean",
+                    "Fund Flags": " | ".join(f_flags) if f_flags else "\u2705 Clean",
                 })
-                prog.progress((i+1)/len(df_h), text=f"Analysing {sym}…")
+                prog.progress((i+1)/len(df_h), text=f"Analysing {sym}\u2026")
 
             prog.empty()
             rf_df = pd.DataFrame(rf_rows).sort_values("Score", ascending=True)
@@ -1715,27 +1860,33 @@ with tab_holdings:
                 return "color:#d97706;font-weight:700"
             def _fc(val):
                 s = str(val)
-                if "🔴" in s: return "color:#dc2626;font-size:.78rem"
-                if "🟡" in s: return "color:#d97706;font-size:.78rem"
-                if "🟢" in s or "✅" in s: return "color:#16a34a;font-size:.78rem"
+                if "\U0001f534" in s: return "color:#dc2626;font-size:.78rem"
+                if "\U0001f7e1" in s: return "color:#d97706;font-size:.78rem"
+                if "\U0001f7e2" in s or "\u2705" in s: return "color:#16a34a;font-size:.78rem"
                 return "font-size:.78rem"
 
             st.dataframe(
                 rf_df.style
-                    .map(_sc, subset=["Signal"])
-                    .map(_fc, subset=["Tech Flags","Fund Flags"]),
+                    .applymap(_sc, subset=["Signal"])
+                    .applymap(_fc, subset=["Tech Flags","Fund Flags"]),
                 use_container_width=True,
                 height=min(60+len(rf_df)*36, 560),
                 hide_index=True,
             )
             st.caption(
-                "Technical: RSI · MACD · 200 EMA · 50 EMA · Bollinger · 52w position · Volume  |  "
-                "Fundamental: P/E · P/B · D/E · ROE · Margin · Current ratio · EPS/Rev growth  |  "
-                "Score ≥5 = BUY · ≤−3 = SELL · else HOLD — screening only, not financial advice."
+                "Technical: RSI \u00b7 MACD \u00b7 200 EMA \u00b7 50 EMA \u00b7 Bollinger \u00b7 52w position \u00b7 Volume  |  "
+                "Fundamental: P/E \u00b7 P/B \u00b7 D/E \u00b7 ROE \u00b7 Margin \u00b7 Current ratio \u00b7 EPS/Rev growth  |  "
+                "Score \u22655 = BUY \u00b7 \u2264\u22123 = SELL \u00b7 else HOLD \u2014 screening only, not financial advice."
             )
 
             st.markdown("---")
-            st.markdown("##### 📰 Portfolio News Feed")
+
+            # ================================================================
+            # PORTFOLIO NEWS FEED — PER COMPANY SCROLLABLE PANELS
+            # 2 companies per row, each panel has sticky header + scrollable body
+            # Sources: Yahoo Finance, Mint, Business Standard, NSE Announcements
+            # ================================================================
+            st.markdown("##### \U0001f4f0 Portfolio News Feed")
             st.caption("Each panel shows all news for one company. Scroll within each panel. 2 columns, sorted by portfolio value.")
 
             @st.cache_data(ttl=300)
@@ -1796,7 +1947,7 @@ with tab_holdings:
                                     all_items.append({
                                         "title": title,
                                         "link": link or f"https://www.nseindia.com/get-quotes/equity?symbol={sym}",
-                                        "published": pub_str or "—",
+                                        "published": pub_str or "\u2014",
                                         "pub_dt": pub_dt,
                                         "source": "NSE", "source_type": "NSE", "symbol": sym,
                                     })
@@ -1810,7 +1961,7 @@ with tab_holdings:
                     k = item["title"][:60].lower().strip()
                     if k not in seen:
                         seen.add(k); unique.append(item)
-                unique.sort(key=lambda x: x.get("pub_dt").timestamp() if x.get("pub_dt") else 0.0, reverse=True)
+                unique.sort(key=lambda x: x.get("pub_dt") or datetime.min, reverse=True)
                 return unique
 
             SOURCE_COLORS = {
@@ -1818,7 +1969,7 @@ with tab_holdings:
                 "Business Standard": "#7c3aed", "NSE": "#059669",
             }
 
-            with st.spinner("Fetching news for all holdings…"):
+            with st.spinner("Fetching news for all holdings\u2026"):
                 all_news = fetch_portfolio_news(tuple(df_h["Symbol"].tolist()))
 
             if not all_news:
@@ -1831,6 +1982,7 @@ with tab_holdings:
                     if s:
                         news_by_sym[s].append(item)
 
+                # Only render panels for companies that have at least one article
                 syms_with_news = [s for s in df_h["Symbol"].tolist() if news_by_sym.get(s)]
                 syms_no_news   = [s for s in df_h["Symbol"].tolist() if not news_by_sym.get(s)]
                 PANEL_H = 560
@@ -1874,7 +2026,7 @@ with tab_holdings:
                                     f'{item["title"]}</a></div>'
                                     f'<div style="font-size:.65rem;color:#94a3b8;margin-top:3px;'
                                     f'font-family:JetBrains Mono,monospace;">'
-                                    f'🕐 {item["published"]}</div>'
+                                    f'\U0001f550 {item["published"]}</div>'
                                     f'</div>'
                                 )
 
@@ -1911,9 +2063,9 @@ with tab_holdings:
     st.markdown("---")
     st.markdown(
         '<div style="font-size:.72rem;color:#94a3b8;font-family:JetBrains Mono,monospace;">'
-        "💼 Holdings XLSX from Zerodha Console → Portfolio → Holdings → Download · "
-        "Live LTP via yfinance · News: Yahoo Finance, Mint, Business Standard, NSE · "
-        "Signals: technical + fundamental screening — not financial advice."
+        "\U0001f4bc Holdings XLSX from Zerodha Console \u2192 Portfolio \u2192 Holdings \u2192 Download \u00b7 "
+        "Live LTP via yfinance \u00b7 News: Yahoo Finance, Mint, Business Standard, NSE \u00b7 "
+        "Signals: technical + fundamental screening \u2014 not financial advice."
         '</div>',
         unsafe_allow_html=True
     )
@@ -1922,15 +2074,19 @@ with tab_holdings:
 
 # =============================================================================
 # TAB 9 — Equity Research (AI-Powered Institutional Analysis)
+# Uses Claude claude-sonnet-4-20250514 via the Anthropic API.
+# The full 15-section institutional research prompt is sent with the company name.
+# Output streams section by section. Multi-part reports use "Continue" button.
 # =============================================================================
 with tab_research:
     st.markdown("#### 🔍 Equity Research — AI Institutional Analysis")
     st.caption(
         "Enter any company name or ticker. The AI generates a full 15-section institutional "
         "equity research report: thesis, Porter's Five Forces, financial model, DCF, scenario analysis, "
-        "risk framework, and more. Methodology: Goldman/JPMorgan calibre. Powered by Gemini."
+        "risk framework, and more. Methodology: Goldman/JPMorgan calibre. Powered by Claude."
     )
 
+    # ── Prompt constants ──────────────────────────────────────────────────────
     RESEARCH_SYSTEM_PROMPT = """You are a senior equity research analyst with 20+ years of institutional experience across bulge-bracket and elite boutique firms — equivalent in calibre to lead analysts at Goldman Sachs, JPMorgan, Morgan Stanley, UBS, Barclays, HSBC, Bank of America, Citi, and Jefferies. You have deep expertise across all sectors, market caps, and geographies, covering both listed equities and private companies.
 
 Your output will be consumed exclusively by senior buy-side and sell-side professionals, portfolio managers, and capital allocators. Do not simplify, do not hedge unnecessarily, do not add disclaimers beyond those standard in institutional research. Use the full vocabulary of the profession: EV/EBITDA, FCF yield, ROIC, WACC, NTM multiples, comps, DCF, sum-of-the-parts, operating leverage, convexity, downside protection, and all other technical terminology as required. The reader is sophisticated. Speak to them accordingly.
@@ -1976,13 +2132,15 @@ ANALYTICAL STANDARDS:
   To continue: reply with "Continue"
 → When the user sends "Continue", resume from the next section without re-introducing the company."""
 
+    # ── Session state ─────────────────────────────────────────────────────────
     if "research_messages" not in st.session_state:
-        st.session_state.research_messages = []
+        st.session_state.research_messages = []   # list of {role, content}
     if "research_company" not in st.session_state:
         st.session_state.research_company  = ""
     if "research_running" not in st.session_state:
         st.session_state.research_running  = False
 
+    # ── Input row ─────────────────────────────────────────────────────────────
     ri1, ri2, ri3 = st.columns([3, 1, 1])
     with ri1:
         company_input = st.text_input(
@@ -2001,6 +2159,7 @@ ANALYTICAL STANDARDS:
         st.session_state.research_company  = ""
         st.rerun()
 
+    # ── Trigger new report ────────────────────────────────────────────────────
     if run_btn and company_input.strip():
         company = company_input.strip()
         st.session_state.research_company  = company
@@ -2009,6 +2168,7 @@ ANALYTICAL STANDARDS:
         ]
         st.rerun()
 
+    # ── Continue button (shown when report is paused) ─────────────────────────
     last_content = ""
     if st.session_state.research_messages:
         last_msg = st.session_state.research_messages[-1]
@@ -2024,6 +2184,7 @@ ANALYTICAL STANDARDS:
             )
             st.rerun()
 
+    # ── Display existing conversation ─────────────────────────────────────────
     if st.session_state.research_messages:
         company_label = st.session_state.research_company
         if company_label:
@@ -2043,13 +2204,16 @@ ANALYTICAL STANDARDS:
                     unsafe_allow_html=True
                 )
             elif msg["role"] == "assistant":
+                # Render the report in a styled scrollable container
                 import html as _html
                 safe_content = msg["content"]
 
+                # Style section headers (lines starting with digit+dot or === lines)
                 import re as _re
                 lines = safe_content.split('\n')
                 styled_lines = []
                 for line in lines:
+                    # Section headers like "1. COVER PAGE" or "══════"
                     if _re.match(r'^─+$', line) or _re.match(r'^═+$', line):
                         styled_lines.append(f'<hr style="border:none;border-top:1px solid #e2e8f0;margin:12px 0;">')
                     elif _re.match(r'^\d+\.\s+[A-Z]', line):
@@ -2100,6 +2264,9 @@ ANALYTICAL STANDARDS:
                     scrolling=True,
                 )
 
+    # ── Run the API call (Google Gemini — free tier) ─────────────────────────
+    # Get free API key at: https://aistudio.google.com
+    # Add to Streamlit Cloud → Settings → Secrets:  GEMINI_API_KEY = "AIza..."
     msgs = st.session_state.research_messages
     if msgs and msgs[-1]["role"] == "user":
         with st.spinner("Generating institutional research report… this takes 30–60 seconds."):
@@ -2117,6 +2284,8 @@ ANALYTICAL STANDARDS:
                     )
                     st.stop()
 
+                # Convert conversation history to Gemini format
+                # Gemini uses "parts" instead of "content", and "model" instead of "assistant"
                 gemini_contents = []
                 for m in msgs:
                     role = "model" if m["role"] == "assistant" else "user"
@@ -2125,6 +2294,7 @@ ANALYTICAL STANDARDS:
                         "parts": [{"text": m["content"]}]
                     })
 
+                # Gemini 1.5 Pro — free tier: 15 RPM, 1M TPD
                 _gemini_url = (
                     f"https://generativelanguage.googleapis.com/v1beta/models/"
                     f"gemini-2.0-flash:generateContent?key={_gemini_key}"
@@ -2146,6 +2316,7 @@ ANALYTICAL STANDARDS:
                 )
                 data = resp.json()
 
+                # Extract text from Gemini response structure
                 if "candidates" in data and data["candidates"]:
                     text = (
                         data["candidates"][0]
@@ -2192,6 +2363,570 @@ ANALYTICAL STANDARDS:
 
 
 # =============================================================================
+# STICKY TAB BAR — JavaScript implementation
+# Streamlit wraps tabs in a scrollable container so CSS sticky doesn't work.
+# This JS watches scroll position and fixes the tab bar when it leaves viewport.
+# =============================================================================
+st.components.v1.html("""
+<script>
+(function() {
+  var doc = window.parent.document;
+  var tabBar = null;
+  var placeholder = null;
+  var stuck = false;
+  var TICKER_H = 104; // Streamlit header (58px) + ticker bar (46px)
+
+  function findTabBar() {
+    return doc.querySelector('[data-baseweb="tab-list"]');
+  }
+
+  function getTabBarTop() {
+    var tb = findTabBar();
+    if (!tb) return 9999;
+    return tb.getBoundingClientRect().top;
+  }
+
+  function stickTabBar() {
+    tabBar = findTabBar();
+    if (!tabBar) return;
+    if (!stuck) {
+      tabBar.style.position  = 'fixed';
+      tabBar.style.top       = TICKER_H + 'px';
+      tabBar.style.left      = '0';
+      tabBar.style.right     = '0';
+      tabBar.style.zIndex    = '989';
+      tabBar.style.background = '#ffffff';
+      tabBar.style.boxShadow = '0 3px 10px rgba(0,0,0,0.08)';
+      tabBar.style.transition = 'top 0.2s ease';
+      stuck = true;
+    }
+  }
+
+  function unstickTabBar() {
+    tabBar = findTabBar();
+    if (!tabBar) return;
+    if (stuck) {
+      tabBar.style.position  = '';
+      tabBar.style.top       = '';
+      tabBar.style.left      = '';
+      tabBar.style.right     = '';
+      tabBar.style.zIndex    = '';
+      tabBar.style.boxShadow = '';
+      stuck = false;
+    }
+  }
+
+  function onScroll() {
+    tabBar = findTabBar();
+    if (!tabBar) return;
+    // When natural top position would be above TICKER_H, fix it
+    if (!stuck) {
+      var rect = tabBar.getBoundingClientRect();
+      if (rect.top <= TICKER_H) stickTabBar();
+    } else {
+      // Check if we've scrolled back up enough to release
+      // Get parent scroll position
+      var main = doc.querySelector('[data-testid="stAppViewContainer"]') ||
+                 doc.querySelector('.main') || doc.documentElement;
+      if (main.scrollTop < 60) unstickTabBar();
+    }
+  }
+
+  // Adjust for sidebar open/close (same as ticker bar)
+  function getSidebarWidth() {
+    var sb = doc.querySelector('[data-testid="stSidebar"]');
+    if (!sb) return 0;
+    if (sb.getAttribute('aria-expanded') === 'false') return 0;
+    return sb.getBoundingClientRect().width || 0;
+  }
+
+  function updateTabBarLeft() {
+    if (stuck && tabBar) {
+      tabBar.style.left = getSidebarWidth() + 'px';
+    }
+  }
+
+  // Listen to scroll on the main container
+  function attachScroll() {
+    var containers = [
+      doc.querySelector('[data-testid="stAppViewContainer"]'),
+      doc.querySelector('.main'),
+      window.parent,
+    ];
+    containers.forEach(function(c) {
+      if (c) c.addEventListener('scroll', onScroll, {passive: true});
+    });
+  }
+
+  // Watch sidebar for open/close
+  var sb = doc.querySelector('[data-testid="stSidebar"]');
+  if (sb) {
+    new MutationObserver(updateTabBarLeft)
+      .observe(sb, {attributes: true, attributeFilter: ['aria-expanded','style']});
+  }
+  window.parent.addEventListener('resize', updateTabBarLeft);
+
+  // Init
+  var count = 0;
+  var init = setInterval(function() {
+    tabBar = findTabBar();
+    if (tabBar) {
+      attachScroll();
+      // Stick immediately since dashboard loads scrolled
+      stickTabBar();
+      updateTabBarLeft();
+    }
+    if (++count > 20) clearInterval(init);
+  }, 300);
+})();
+</script>
+""", height=0)
+
+# =============================================================================
+# TAB — MARKET INTEL  (FII/DII · Block Deals · Corp Events · Watchlist)
+# Consolidated from 4 tabs into one for a cleaner nav bar.
+# =============================================================================
+with tab_intel:
+
+    intel_fii, intel_deals, intel_events, intel_watchlist = st.tabs([
+        "🏦 FII / DII Flows",
+        "📋 Block & Bulk Deals",
+        "📆 Corporate Events",
+        "👁️ Watchlist",
+    ])
+
+    # =========================================================================
+    # FII / DII FLOWS
+    # NSE publishes daily provisional FII/DII data.
+    # We scrape the NSE market-data page HTML as fallback if the API returns 0.
+    # =========================================================================
+    with intel_fii:
+        st.markdown("##### 🏦 FII / DII Flow Tracker")
+        st.caption("Daily provisional institutional flows from NSE India · Refreshed hourly")
+
+        @st.cache_data(ttl=3600)
+        def fetch_fii_dii():
+            import re as _re
+            headers = {
+                "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept":          "application/json, text/plain, */*",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Connection":      "keep-alive",
+                "Referer":         "https://www.nseindia.com/market-data/fii-dii-trading-activity",
+            }
+            try:
+                sess = requests.Session()
+                # Step 1 — get homepage cookie
+                sess.get("https://www.nseindia.com", headers=headers, timeout=10)
+                # Step 2 — visit the page to get page-specific cookie
+                sess.get("https://www.nseindia.com/market-data/fii-dii-trading-activity",
+                         headers=headers, timeout=10)
+                # Step 3 — call the API
+                resp = sess.get(
+                    "https://www.nseindia.com/api/fiidiiTradeReact",
+                    headers=headers, timeout=12
+                )
+                data = resp.json()
+                if not isinstance(data, list) or not data:
+                    return None, f"NSE returned: {str(data)[:200]}"
+
+                rows = []
+                for d in data:
+                    # NSE field names vary — try multiple possible keys
+                    def _f(d, *keys):
+                        for k in keys:
+                            v = d.get(k, d.get(k.lower(), d.get(k.upper())))
+                            if v is not None:
+                                try:
+                                    return float(str(v).replace(",","").strip() or 0)
+                                except Exception:
+                                    pass
+                        return 0.0
+
+                    date_val = (d.get("date") or d.get("Date") or d.get("DATE") or "")
+                    fii_b = _f(d, "fiiBuyValue",  "fii_buy",  "FII_BUY_VALUE",  "buyValue")
+                    fii_s = _f(d, "fiiSellValue", "fii_sell", "FII_SELL_VALUE", "sellValue")
+                    fii_n = _f(d, "fiiNetValue",  "fii_net",  "FII_NET_VALUE",  "netValue")
+                    dii_b = _f(d, "diiBuyValue",  "dii_buy",  "DII_BUY_VALUE")
+                    dii_s = _f(d, "diiSellValue", "dii_sell", "DII_SELL_VALUE")
+                    dii_n = _f(d, "diiNetValue",  "dii_net",  "DII_NET_VALUE")
+
+                    # If net is 0 but buy/sell exist, derive it
+                    if fii_n == 0 and fii_b != 0: fii_n = fii_b - fii_s
+                    if dii_n == 0 and dii_b != 0: dii_n = dii_b - dii_s
+
+                    rows.append({
+                        "Date": date_val,
+                        "FII Buy": fii_b, "FII Sell": fii_s, "FII Net": fii_n,
+                        "DII Buy": dii_b, "DII Sell": dii_s, "DII Net": dii_n,
+                    })
+
+                if not rows:
+                    return None, "No rows parsed"
+
+                df = pd.DataFrame(rows)
+                for fmt in ["%d-%b-%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%Y", "%b %d, %Y"]:
+                    try:
+                        df["Date"] = pd.to_datetime(df["Date"], format=fmt)
+                        break
+                    except Exception:
+                        pass
+                # Check if all net values are 0 — may mean parsing failed
+                if df["FII Net"].abs().sum() == 0 and df["DII Net"].abs().sum() == 0:
+                    # Return raw sample for debugging
+                    return None, f"All values zero. Raw sample: {str(data[0])[:400]}"
+                df = df.sort_values("Date").tail(30).reset_index(drop=True)
+                return df, None
+            except Exception as e:
+                return None, str(e)
+
+        with st.spinner("Fetching FII/DII flows from NSE…"):
+            fii_df, fii_err = fetch_fii_dii()
+
+        if fii_err or fii_df is None:
+            st.warning(f"⚠️ NSE API unavailable: `{fii_err}`")
+            st.markdown(
+                "NSE's API requires a live browser session. "
+                "Click the link below to view directly on NSE:"
+            )
+            st.markdown(
+                '<a href="https://www.nseindia.com/market-data/fii-dii-trading-activity" '
+                'target="_blank" style="display:inline-block;background:#0057b8;color:#fff;'
+                'padding:7px 16px;border-radius:6px;font-size:.82rem;font-weight:600;'
+                'text-decoration:none;">📊 Open FII/DII on NSE ↗</a>',
+                unsafe_allow_html=True
+            )
+        else:
+            last = fii_df.iloc[-1]
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("FII Net Today",  f"₹{last['FII Net']:+,.0f} Cr",
+                      delta_color="normal" if last["FII Net"] >= 0 else "inverse")
+            m2.metric("DII Net Today",  f"₹{last['DII Net']:+,.0f} Cr",
+                      delta_color="normal" if last["DII Net"] >= 0 else "inverse")
+            m3.metric("FII Net 30d",    f"₹{fii_df['FII Net'].sum():+,.0f} Cr")
+            m4.metric("DII Net 30d",    f"₹{fii_df['DII Net'].sum():+,.0f} Cr")
+            st.markdown("---")
+
+            fig_fii = go.Figure()
+            fig_fii.add_trace(go.Bar(
+                x=fii_df["Date"], y=fii_df["FII Net"], name="FII Net",
+                marker_color=[GREEN if v >= 0 else RED for v in fii_df["FII Net"]], opacity=0.85,
+            ))
+            fig_fii.add_trace(go.Bar(
+                x=fii_df["Date"], y=fii_df["DII Net"], name="DII Net",
+                marker_color=[BLUE if v >= 0 else YELLOW for v in fii_df["DII Net"]], opacity=0.85,
+            ))
+            fig_fii.update_layout(**plotly_base_layout(360), barmode="group",
+                title=dict(text="Daily Net FII / DII Flows (₹ Crore) — Last 30 Days",
+                           font=dict(size=12,color="#475569",family="JetBrains Mono")))
+            st.plotly_chart(fig_fii, use_container_width=True)
+
+            fii_df["FII Cum"] = fii_df["FII Net"].cumsum()
+            fii_df["DII Cum"] = fii_df["DII Net"].cumsum()
+            fig_cum = go.Figure()
+            fig_cum.add_trace(go.Scatter(x=fii_df["Date"], y=fii_df["FII Cum"],
+                name="FII Cumulative", line=dict(color=GREEN, width=2)))
+            fig_cum.add_trace(go.Scatter(x=fii_df["Date"], y=fii_df["DII Cum"],
+                name="DII Cumulative", line=dict(color=BLUE, width=2)))
+            fig_cum.add_hline(y=0, line_color="#94a3b8", line_dash="dash", line_width=1)
+            fig_cum.update_layout(**plotly_base_layout(280),
+                title=dict(text="Cumulative 30-Day Net Flow (₹ Crore)",
+                           font=dict(size=12,color="#475569",family="JetBrains Mono")))
+            st.plotly_chart(fig_cum, use_container_width=True)
+
+            with st.expander("📋 Raw Data"):
+                d2 = fii_df.copy()
+                d2["Date"] = d2["Date"].dt.strftime("%d %b %Y")
+                for c in ["FII Buy","FII Sell","FII Net","DII Buy","DII Sell","DII Net"]:
+                    d2[c] = d2[c].apply(lambda x: f"₹{x:,.0f} Cr")
+                st.dataframe(d2[["Date","FII Buy","FII Sell","FII Net",
+                                  "DII Buy","DII Sell","DII Net"]],
+                             use_container_width=True, hide_index=True)
+
+    # =========================================================================
+    # BLOCK & BULK DEALS
+    # Scraping NSE website tables directly (more reliable than the API)
+    # =========================================================================
+    with intel_deals:
+        st.markdown("##### 📋 Block & Bulk Deals")
+        st.caption("Block deals ≥₹10 Cr · Bulk deals >0.5% equity · NSE India · Today")
+
+        @st.cache_data(ttl=600)
+        def fetch_nse_deals(deal_type="block"):
+            headers = {
+                "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept":          "application/json, text/plain, */*",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Referer":         f"https://www.nseindia.com/market-data/{deal_type}-deals",
+            }
+            try:
+                sess = requests.Session()
+                sess.get("https://www.nseindia.com", headers=headers, timeout=8)
+                sess.get(f"https://www.nseindia.com/market-data/{deal_type}-deals",
+                         headers=headers, timeout=8)
+                resp = sess.get(
+                    f"https://www.nseindia.com/api/{deal_type}-deal",
+                    headers=headers, timeout=10
+                )
+                data = resp.json()
+                records = data.get("data", data) if isinstance(data, dict) else data
+                if not isinstance(records, list):
+                    return None, f"Unexpected format: {str(data)[:200]}"
+                return pd.DataFrame(records) if records else pd.DataFrame(), None
+            except Exception as e:
+                return None, str(e)
+
+        d1_tab, d2_tab = st.tabs(["🔷 Block Deals", "🔶 Bulk Deals"])
+
+        for (dtab, dtype, dlabel, dlink) in [
+            (d1_tab, "block", "block", "block-deals"),
+            (d2_tab, "bulk",  "bulk",  "bulk-deals"),
+        ]:
+            with dtab:
+                with st.spinner(f"Fetching {dlabel} deals…"):
+                    deal_df, deal_err = fetch_nse_deals(dtype)
+                if deal_err:
+                    st.warning(f"⚠️ NSE {dlabel} deals API unavailable.")
+                    st.markdown(
+                        f'<a href="https://www.nseindia.com/market-data/{dlink}" '
+                        f'target="_blank" style="display:inline-block;background:#0057b8;'
+                        f'color:#fff;padding:7px 16px;border-radius:6px;font-size:.82rem;'
+                        f'font-weight:600;text-decoration:none;">'
+                        f'Open {dlabel.title()} Deals on NSE ↗</a>',
+                        unsafe_allow_html=True
+                    )
+                    st.markdown(
+                        f'<a href="https://www.bseindia.com/markets/equity/EQReports/bulk_deals.aspx" '
+                        f'target="_blank" style="display:inline-block;background:#f1f5f9;'
+                        f'color:#0057b8;border:1px solid #e2e8f0;padding:7px 16px;border-radius:6px;'
+                        f'font-size:.82rem;font-weight:600;text-decoration:none;margin-left:8px;">'
+                        f'Open on BSE ↗</a>',
+                        unsafe_allow_html=True
+                    )
+                elif deal_df is not None and deal_df.empty:
+                    st.info(
+                        f"No {dlabel} deals reported yet today. "
+                        "Data updates during and after market hours (9:15 AM – 3:30 PM IST)."
+                    )
+                elif deal_df is not None:
+                    st.caption(f"{len(deal_df)} {dlabel} deal(s) today")
+                    st.dataframe(deal_df, use_container_width=True,
+                                 height=min(60+len(deal_df)*36, 480), hide_index=True)
+
+    # =========================================================================
+    # CORPORATE EVENTS
+    # =========================================================================
+    with intel_events:
+        st.markdown("##### 📆 Corporate Events")
+        st.caption("Board meetings · Dividends · Bonus · Splits · Rights — from NSE India")
+
+        @st.cache_data(ttl=3600)
+        def fetch_corporate_events():
+            headers = {
+                "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                "Accept":          "application/json, text/plain, */*",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Referer":         "https://www.nseindia.com/market-data/upcoming-corporate-actions",
+            }
+            try:
+                sess = requests.Session()
+                sess.get("https://www.nseindia.com", headers=headers, timeout=8)
+                resp = sess.get(
+                    "https://www.nseindia.com/api/corporates-corporateActions?index=equities",
+                    headers=headers, timeout=10
+                )
+                data = resp.json()
+                records = data.get("data", data) if isinstance(data, dict) else data
+                if not isinstance(records, list):
+                    return None, str(data)[:200]
+                return pd.DataFrame(records) if records else pd.DataFrame(), None
+            except Exception as e:
+                return None, str(e)
+
+        # Filter row — side-by-side aligned ──────────────────────────────────
+        ef1, ef2 = st.columns([3, 2])
+        with ef1:
+            ev_filter = st.selectbox(
+                "Event Type",
+                ["All","Board Meeting","Dividend","Bonus","Split","Rights","AGM"],
+                key="ev_filter_intel"
+            )
+        with ef2:
+            st.markdown("<div style='height:26px'></div>", unsafe_allow_html=True)
+            portfolio_only = st.checkbox(
+                "Portfolio stocks only", value=False, key="ev_portfolio_intel"
+            )
+
+        with st.spinner("Fetching corporate events…"):
+            ev_df, ev_err = fetch_corporate_events()
+
+        if ev_err:
+            st.warning(f"⚠️ {ev_err}")
+            st.markdown(
+                '<a href="https://www.nseindia.com/market-data/upcoming-corporate-actions" '
+                'target="_blank" style="display:inline-block;background:#0057b8;color:#fff;'
+                'padding:7px 16px;border-radius:6px;font-size:.82rem;font-weight:600;'
+                'text-decoration:none;">View on NSE ↗</a>',
+                unsafe_allow_html=True
+            )
+        elif ev_df is not None and not ev_df.empty:
+            ev_df.columns = [c.strip() for c in ev_df.columns]
+            if ev_filter != "All":
+                purpose_col = next((c for c in ev_df.columns
+                    if any(k in c.lower() for k in ("purpose","subject","action"))), None)
+                if purpose_col:
+                    ev_df = ev_df[ev_df[purpose_col].str.upper().str.contains(
+                        ev_filter.upper(), na=False)]
+            if portfolio_only:
+                port_syms = st.session_state.get("portfolio_symbols", [])
+                if port_syms:
+                    sym_col = next((c for c in ev_df.columns
+                        if c.lower() in ("symbol","tradingsymbol")), None)
+                    if sym_col:
+                        ev_df = ev_df[ev_df[sym_col].isin(port_syms)]
+                else:
+                    st.info("Upload holdings in the Portfolio tab first to use this filter.")
+            st.caption(f"{len(ev_df)} events")
+            st.dataframe(ev_df, use_container_width=True,
+                         height=min(60+len(ev_df)*36, 600), hide_index=True)
+        else:
+            st.info("No upcoming corporate events found.")
+
+    # =========================================================================
+    # WATCHLIST
+    # =========================================================================
+    with intel_watchlist:
+        st.markdown("##### 👁️ Watchlist")
+        st.caption("Track stocks you're monitoring. Press Enter or click Add.")
+
+        if "watchlist" not in st.session_state:
+            st.session_state.watchlist = ["HDFCBANK","RELIANCE","TCS","ICICIBANK","AXISBANK"]
+
+        # Add row — Enter key works via form ──────────────────────────────────
+        with st.form(key="wl_add_form", clear_on_submit=True):
+            wfa, wfb = st.columns([4, 1])
+            with wfa:
+                new_sym = st.text_input(
+                    "Add symbol", placeholder="e.g. INFY, BAJFINANCE, TITAN",
+                    label_visibility="collapsed", key="wl_form_input"
+                )
+            with wfb:
+                submitted = st.form_submit_button("➕ Add", use_container_width=True)
+            if submitted and new_sym.strip():
+                s = new_sym.strip().upper()
+                if s not in st.session_state.watchlist:
+                    st.session_state.watchlist.append(s)
+                    st.rerun()
+
+        # Remove row ──────────────────────────────────────────────────────────
+        if st.session_state.watchlist:
+            wr1, wr2 = st.columns([4, 1])
+            with wr1:
+                to_remove = st.multiselect(
+                    "Remove", st.session_state.watchlist,
+                    key="wl_remove_multi", label_visibility="collapsed",
+                    placeholder="Select symbols to remove…"
+                )
+            with wr2:
+                if st.button("🗑️ Remove", use_container_width=True, key="wl_remove_btn"):
+                    st.session_state.watchlist = [
+                        s for s in st.session_state.watchlist if s not in to_remove
+                    ]
+                    st.rerun()
+
+        st.markdown("---")
+
+        if not st.session_state.watchlist:
+            st.info("Watchlist is empty. Add a symbol above.")
+        else:
+            @st.cache_data(ttl=60)
+            def fetch_watchlist_data(symbols_tuple):
+                rows = []
+                for sym in symbols_tuple:
+                    price, chg = fetch_ticker_snapshot(f"{sym}.NS")
+                    tech = None
+                    try:
+                        df_t = yf.download(f"{sym}.NS", period="1y", interval="1d",
+                                           progress=False, auto_adjust=True)
+                        if not df_t.empty and len(df_t) >= 30:
+                            close  = df_t["Close"].squeeze()
+                            high   = df_t["High"].squeeze()
+                            low    = df_t["Low"].squeeze()
+                            ema200 = float(close.ewm(span=200,adjust=False).mean().iloc[-1])
+                            ltp    = float(close.iloc[-1])
+                            d_     = close.diff()
+                            g_     = d_.clip(lower=0).ewm(com=13,min_periods=14).mean()
+                            l_     = (-d_.clip(upper=0)).ewm(com=13,min_periods=14).mean()
+                            rsi    = float((100-100/(1+g_/l_.replace(0,0.0001))).iloc[-1])
+                            w52h   = float(high.tail(252).max())
+                            w52l   = float(low.tail(252).min())
+                            w52p   = (ltp-w52l)/(w52h-w52l)*100 if w52h!=w52l else 50
+                            tech   = {"rsi":round(rsi,1),"above_200":ltp>ema200,
+                                      "ema200":round(ema200,2),"w52_pos":round(w52p,1)}
+                    except Exception:
+                        pass
+                    rows.append({
+                        "Symbol":    sym,
+                        "Price":     round(price,2)         if price else None,
+                        "Day %":     round(chg,2)           if chg   else None,
+                        "RSI":       tech["rsi"]            if tech  else None,
+                        "vs 200EMA": ("Above" if tech["above_200"] else "Below") if tech else None,
+                        "52w Pos %": tech["w52_pos"]        if tech  else None,
+                    })
+                return rows
+
+            with st.spinner(f"Loading {len(st.session_state.watchlist)} symbols…"):
+                wl_rows = fetch_watchlist_data(tuple(st.session_state.watchlist))
+
+            wl_df = pd.DataFrame(wl_rows)
+
+            def _wl_chg(v):
+                if isinstance(v,float): return "color:#16a34a;font-weight:600" if v>0 else "color:#dc2626;font-weight:600" if v<0 else ""
+                return ""
+            def _wl_ema(v):
+                if v=="Above": return "color:#16a34a;font-weight:600"
+                if v=="Below": return "color:#dc2626;font-weight:600"
+                return ""
+            def _wl_rsi(v):
+                if isinstance(v,float):
+                    if v>70: return "color:#dc2626"
+                    if v<30: return "color:#16a34a"
+                return ""
+
+            st.dataframe(
+                wl_df.style
+                    .applymap(_wl_chg, subset=["Day %"])
+                    .applymap(_wl_ema, subset=["vs 200EMA"])
+                    .applymap(_wl_rsi, subset=["RSI"])
+                    .format({"Price":"₹{:,.2f}","Day %":"{:+.2f}%",
+                             "RSI":"{:.1f}","52w Pos %":"{:.1f}%"}, na_rep="—"),
+                use_container_width=True,
+                height=min(60+len(wl_df)*36, 520), hide_index=True
+            )
+
+            # Quick chart ─────────────────────────────────────────────────────
+            st.markdown("---")
+            wl_chart_sym = st.selectbox("Quick chart", st.session_state.watchlist, key="wl_chart")
+            if wl_chart_sym:
+                import urllib.parse as _wlup
+                _wl_p = _wlup.urlencode({
+                    "frameElementId":"wl_tv","symbol":wl_chart_sym,
+                    "interval":"D","timezone":"Asia/Kolkata","theme":"light",
+                    "style":"1","locale":"en","toolbar_bg":"f8f9fb",
+                    "hide_side_toolbar":"0","allow_symbol_change":"1","withdateranges":"1",
+                })
+                st.components.v1.html(
+                    f'<!DOCTYPE html><html><head><meta charset="utf-8">'
+                    f'<style>html,body{{margin:0;padding:0;background:#fff;}}'
+                    f'iframe{{border:none;border-radius:8px;display:block;}}</style></head>'
+                    f'<body><iframe id="wl_tv" src="https://s.tradingview.com/widgetembed/?{_wl_p}"'
+                    f' width="100%" height="390" frameborder="0" scrolling="no"'
+                    f' allowtransparency="true" allowfullscreen></iframe></body></html>',
+                    height=400
+                )
+
+
 # FOOTER
 # =============================================================================
 st.markdown("---")
