@@ -185,9 +185,24 @@ st.markdown("""
     .news-meta { font-size: 0.7rem; color: #94a3b8; margin-top: 3px; font-family: 'JetBrains Mono', monospace; }
 
     /* ── Tabs ── */
-    .stTabs [data-baseweb="tab-list"] { background: #f4f6f9; gap: 6px; border-radius: 8px; padding: 5px 6px; }
+    /* Sticky tab bar: sits just below the ticker bar (top: 104px = 58px header + 46px ticker) */
+    .stTabs [data-baseweb="tab-list"] {
+        background: #ffffff;
+        gap: 6px;
+        border-radius: 0;
+        padding: 6px 8px;
+        position: sticky;
+        top: 104px;
+        z-index: 990;
+        border-bottom: 2px solid #e2e8f0;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
     .stTabs [data-baseweb="tab"] { background: transparent; border: none; border-radius: 6px; color: #64748b; font-size: 0.82rem; font-family: 'Inter', sans-serif; padding: 6px 18px !important; }
-    .stTabs [aria-selected="true"] { background: #ffffff !important; color: #0057b8 !important; font-weight: 600; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+    .stTabs [aria-selected="true"] { background: #f0f5ff !important; color: #0057b8 !important; font-weight: 600; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+    /* Extra top padding to prevent content hiding under sticky ticker + tabs */
+    [data-testid="stAppViewContainer"] > .main > .block-container {
+        padding-top: 90px !important;
+    }
 
     /* ── Buttons ── */
     .stButton button { background: #ffffff; border: 1px solid #e2e8f0; color: #475569; font-size: 0.78rem; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
@@ -2247,9 +2262,26 @@ ANALYTICAL STANDARDS:
     if msgs and msgs[-1]["role"] == "user":
         with st.spinner("Generating institutional research report… this takes 30–60 seconds."):
             try:
+                # Read Anthropic API key from Streamlit Secrets
+                # Add to Streamlit Cloud → Settings → Secrets:
+                #   ANTHROPIC_API_KEY = "sk-ant-..."
+                _anthropic_key = st.secrets.get("ANTHROPIC_API_KEY", "") if hasattr(st, "secrets") else ""
+                if not _anthropic_key:
+                    st.error(
+                        "⚠️ **ANTHROPIC_API_KEY not found in Streamlit Secrets.**\n\n"
+                        "Go to Streamlit Cloud → your app → ⋮ → **Settings → Secrets** and add:\n"
+                        "```toml\nANTHROPIC_API_KEY = \"sk-ant-...\"\n```\n"
+                        "Get your key at: [console.anthropic.com](https://console.anthropic.com)"
+                    )
+                    st.stop()
+
                 resp = requests.post(
                     "https://api.anthropic.com/v1/messages",
-                    headers={"Content-Type": "application/json"},
+                    headers={
+                        "Content-Type":      "application/json",
+                        "x-api-key":         _anthropic_key,
+                        "anthropic-version": "2023-06-01",
+                    },
                     json={
                         "model":      "claude-sonnet-4-20250514",
                         "max_tokens": 8000,
