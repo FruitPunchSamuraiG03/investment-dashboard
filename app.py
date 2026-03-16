@@ -270,7 +270,7 @@ def fetch_ticker_bar_batch():
     TICKER_BAR_SYMBOLS = {
         "NIFTY 50":   "^NSEI",
         "BANK NIFTY": "^NSEBANK",
-        "GIFT NIFTY": "GIFTTY=F",
+        "SENSEX":     "^BSESN",
         "SPX":        "^GSPC",
         "BTC":        "BTC-USD",
         "GOLD":       "GC=F",       # COMEX proxy — tracks MCX gold closely
@@ -508,7 +508,7 @@ with st.sidebar:
     # ── Auto Refresh ──────────────────────────────────────────────────────────
     st.markdown('<div class="section-header">⟳ Auto Refresh</div>', unsafe_allow_html=True)
     refresh_map = {"Off": 0, "1 min": 60_000, "5 min": 300_000, "15 min": 900_000}
-    refresh_sel = st.selectbox("Interval", list(refresh_map.keys()), index=0, label_visibility="collapsed")
+    refresh_sel = st.selectbox("Interval", list(refresh_map.keys()), index=1, label_visibility="collapsed")
 
     if AUTOREFRESH_AVAILABLE and refresh_map[refresh_sel] > 0:
         st_autorefresh(interval=refresh_map[refresh_sel], key="autorefresh")
@@ -525,7 +525,7 @@ with st.sidebar:
 
     # ── Indian Indices ─────────────────────────────────────────────────────────
     st.markdown('<div class="section-header">🇮🇳 Indian Indices</div>', unsafe_allow_html=True)
-    for label, sym in {"Nifty 50": "^NSEI", "Bank Nifty": "^NSEBANK", "GIFT Nifty": "GIFTTY=F", "India VIX": "^INDIAVIX"}.items():
+    for label, sym in {"Nifty 50": "^NSEI", "Sensex": "^BSESN", "Bank Nifty": "^NSEBANK", "India VIX": "^INDIAVIX"}.items():
         price, chg = fetch_ticker_snapshot(sym)
         st.metric(label=label, value=fmt_price(price), delta=fmt_pct(chg))
 
@@ -590,7 +590,7 @@ tab_charts, tab_technicals, tab_breadth, tab_news, tab_calendar, tab_tv, tab_twi
     "📰 News",
     "📅 Calendar",
     "📺 TradingView",
-    "🐦 Twitter",
+    "📬 Channels",
 ])
 
 # =============================================================================
@@ -601,7 +601,7 @@ with tab_charts:
     tv_col1, tv_col2 = st.columns([2, 1])
     with tv_col1:
         tv_symbol = st.text_input(
-            "Symbol (TradingView format)", value="NSE:NIFTY",
+            "Symbol (TradingView format)", value="NSE:HDFCBANK",
             help="Examples: NSE:NIFTY, NSE:RELIANCE, NASDAQ:AAPL, NYSE:TSLA",
             key="tv_sym"
         )
@@ -1043,7 +1043,7 @@ with tab_tv:
 # └─────────────────────────────────────────────────────────────────┘
 # =============================================================================
 with tab_twitter:
-    st.markdown("#### 📬 Telegram — Market Channels")
+    st.markdown("#### 📬 Channels — Telegram Market Feeds")
     st.caption(
         "Posts fetched via **RSSHub** (rsshub.app) — a free open-source RSS bridge for Telegram. "
         "Refreshes every 10 min. To add a channel, edit `TELEGRAM_CHANNELS` in `app.py`."
@@ -1063,7 +1063,11 @@ with tab_twitter:
     ]
     # ══════════════════════════════════════════════════════════════
 
-    @st.cache_data(ttl=600)
+    # Refresh telegram posts every 60 seconds when this tab is active
+    if AUTOREFRESH_AVAILABLE:
+        st_autorefresh(interval=60_000, key="telegram_refresh")
+
+    @st.cache_data(ttl=60)
     def fetch_telegram_rss(channel_username):
         """Fetch a Telegram channel's posts via RSSHub's free RSS bridge."""
         url = f"https://rsshub.app/telegram/channel/{channel_username}"
