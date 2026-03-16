@@ -1,5 +1,5 @@
 # =============================================================================
-# INVESTMENT DASHBOARD — Light Mode + Live Sticky Ticker Bar
+# TERMINAL — Investment Dashboard
 # Author: Generated for personal use
 # =============================================================================
 # FUTURE ENHANCEMENTS (not yet built):
@@ -30,8 +30,8 @@ except ImportError:
 # PAGE CONFIG
 # =============================================================================
 st.set_page_config(
-    page_title="Investment Dashboard",
-    page_icon="📈",
+    page_title="TERMINAL",
+    page_icon="⬛",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -501,8 +501,8 @@ st.components.v1.html("""
 # SIDEBAR — Controls + Mini Market Ticker
 # =============================================================================
 with st.sidebar:
-    st.markdown('<div class="dash-title">📊 Markets</div>', unsafe_allow_html=True)
-    st.markdown('<div class="dash-subtitle">Investment Command Center</div>', unsafe_allow_html=True)
+    st.markdown('<div class="dash-title">⬛ TERMINAL</div>', unsafe_allow_html=True)
+    st.markdown('<div class="dash-subtitle">Markets · Data · Intelligence</div>', unsafe_allow_html=True)
     st.markdown("---")
 
     # ── Auto Refresh ──────────────────────────────────────────────────────────
@@ -576,7 +576,7 @@ with st.sidebar:
 # =============================================================================
 # MAIN CONTENT AREA
 # =============================================================================
-st.markdown('<div class="dash-title">INVESTMENT COMMAND CENTER</div>', unsafe_allow_html=True)
+st.markdown('<div class="dash-title">TERMINAL</div>', unsafe_allow_html=True)
 st.markdown('<div class="dash-subtitle">Real-time · Professional Grade · India & Global Markets</div>', unsafe_allow_html=True)
 st.markdown("---")
 
@@ -1029,92 +1029,95 @@ with tab_tv:
 
 
 # =============================================================================
-# TAB 7 — Twitter / X Feed
-# =============================================================================
-# TO ADD MORE ACCOUNTS: copy a <twitter-timeline> block below and change
-# the `data-screen-name` attribute to the new @handle.
-# Requires NO API key — uses Twitter's free public embed widget.
+# TAB 7 — Telegram Channels
+# Uses t.me/s/CHANNEL — Telegram's own public web view.
+# No API key, no auth, no rate limits. Works inside any iframe.
+# TO ADD A CHANNEL: add a new tuple to TELEGRAM_CHANNELS below.
 # =============================================================================
 with tab_twitter:
-    st.markdown("#### 🐦 Twitter / X — Curated Market Feeds")
+    st.markdown("#### 📬 Telegram — Market Channels")
     st.caption(
-        "Live embedded feeds via Twitter's public widget. "
-        "No API key needed. Updates automatically. "
-        "**To add an account:** edit `app.py` and add a new `<twitter-timeline>` block."
+        "Live posts from public Telegram channels, rendered via Telegram's own web view. "
+        "**To add a channel:** edit `app.py` and add a new entry to `TELEGRAM_CHANNELS`."
     )
 
-    # ── Account list — edit here to add/remove accounts ──────────────────────
-    # Format: ("Display Name", "@handle", "short description")
-    TWITTER_ACCOUNTS = [
-        ("Redbox Global India", "RedboxGlobalIndia", "Market insights & trading calls"),
-        # Add more accounts below this line, e.g.:
-        # ("CNBC TV18",        "CNBCTV18News",      "Indian business news"),
-        # ("Zerodha",          "zerodhaonline",      "Brokerage & market education"),
+    # ── Channel list ─────────────────────────────────────────────────────────
+    # Format: ("Display Name", "telegram_username", "short description")
+    TELEGRAM_CHANNELS = [
+        ("RedboxGlobal India",                  "indiaredboxglobal",  "Real-time market news & calls"),
+        ("Beat The Street News",                "Beatthestreetnews",  "Latest share market news"),
+        ("Beat The Street Equity Research",     "btsreports",         "Research reports & books"),
+        # Add more channels below:
+        # ("Moneycontrol",   "moneycontrolcom",   "Business & markets news"),
     ]
     # ─────────────────────────────────────────────────────────────────────────
 
-    if not TWITTER_ACCOUNTS:
-        st.info("No accounts configured. Add handles to the `TWITTER_ACCOUNTS` list in `app.py`.")
+    if not TELEGRAM_CHANNELS:
+        st.info("No channels configured. Add usernames to `TELEGRAM_CHANNELS` in `app.py`.")
     else:
-        # Render one column per account (max 3 per row)
-        COLS_PER_ROW = min(len(TWITTER_ACCOUNTS), 3)
-        rows = [TWITTER_ACCOUNTS[i:i+COLS_PER_ROW] for i in range(0, len(TWITTER_ACCOUNTS), COLS_PER_ROW)]
+        COLS_PER_ROW = min(len(TELEGRAM_CHANNELS), 3)
+        rows = [TELEGRAM_CHANNELS[i:i+COLS_PER_ROW]
+                for i in range(0, len(TELEGRAM_CHANNELS), COLS_PER_ROW)]
 
         for row in rows:
             cols = st.columns(len(row))
-            # st.columns(1) returns a single object in some Streamlit versions — normalise to list
             if not isinstance(cols, list):
                 cols = [cols]
             for col, (display_name, handle, desc) in zip(cols, row):
                 with col:
                     st.markdown(f"**{display_name}**")
                     st.caption(f"@{handle} · {desc}")
-                    # Twitter syndication iframe — renders directly, no JS required,
-                    # works inside Streamlit's sandboxed iframes without ad-blocker issues.
-                    import urllib.parse as _twp
-                    _tw_params = _twp.urlencode({
-                        "dnt":            "true",
-                        "lang":           "en",
-                        "theme":          "light",
-                        "chrome":         "noheader nofooter noborders transparent",
-                        "link_color":     "#0057b8",
-                        "border_color":   "#e2e8f0",
-                        "tweet_limit":    "10",
-                        "show_replies":   "false",
-                        "origin":         "https://publish.twitter.com",
-                    })
-                    twitter_embed = f"""<!DOCTYPE html>
+
+                    # t.me/s/USERNAME is Telegram's official public web viewer
+                    # It needs no cookies/auth and renders inside iframes cleanly.
+                    tg_embed = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8">
 <style>
-  html,body{{margin:0;padding:0;background:#f4f6f9;}}
-  .wrap{{border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.06);}}
-  .fallback{{padding:30px 20px;text-align:center;font-family:Inter,sans-serif;}}
-  .fallback a{{color:#0057b8;font-weight:600;font-size:.9rem;text-decoration:none;}}
-  .fallback p{{color:#94a3b8;font-size:.78rem;margin-top:8px;}}
-</style></head>
+  html, body {{ margin:0; padding:0; background:#f4f6f9; }}
+  .wrap {{
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #ffffff;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    height: 640px;
+  }}
+  iframe {{ width:100%; height:640px; border:none; display:block; border-radius:12px; }}
+  .fallback {{
+    padding: 40px 20px; text-align: center;
+    font-family: Inter, sans-serif; color: #64748b;
+  }}
+  .fallback a {{
+    display: inline-block; margin-top: 12px;
+    background: #0057b8; color: #fff;
+    padding: 8px 20px; border-radius: 6px;
+    text-decoration: none; font-size: .85rem; font-weight: 600;
+  }}
+</style>
+</head>
 <body>
 <div class="wrap">
   <iframe
-    src="https://syndication.twitter.com/srv/timeline-profile/screen-name/{handle}?{_tw_params}"
-    width="100%" height="640"
-    frameborder="0" scrolling="yes"
-    allowtransparency="true">
+    src="https://t.me/s/{handle}"
+    sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+    referrerpolicy="no-referrer"
+    loading="lazy"
+    scrolling="yes">
     <div class="fallback">
-      <a href="https://twitter.com/{handle}" target="_blank">@{handle} on X/Twitter ↗</a>
-      <p>Timeline embed unavailable — click to open directly.</p>
+      <p>Could not load channel preview.</p>
+      <a href="https://t.me/{handle}" target="_blank">Open @{handle} on Telegram ↗</a>
     </div>
   </iframe>
 </div>
-</body></html>
-"""
-                    st.components.v1.html(twitter_embed, height=680, scrolling=True)
+</body></html>"""
+                    st.components.v1.html(tg_embed, height=660, scrolling=False)
 
         st.markdown("---")
         st.markdown(
-            '<div style="font-size:0.72rem;color:#94a3b8;font-family:\'JetBrains Mono\',monospace;">'
-            "⚠️ Twitter embeds require the browser to load scripts from platform.twitter.com. "
-            "If feeds show blank, disable ad-blockers for your dashboard URL. "
-            "Feeds are public — no login required."
+            '<div style="font-size:.72rem;color:#94a3b8;font-family:JetBrains Mono,monospace;">'
+            "📬 Telegram channel previews via t.me public web view. "
+            "If a channel shows blank, it may be private or have restricted web previews. "
+            "Click the fallback link to open it directly in Telegram."
             "</div>",
             unsafe_allow_html=True
         )
@@ -1126,7 +1129,7 @@ with tab_twitter:
 st.markdown("---")
 st.markdown(
     '<div style="text-align:center;font-family:\'JetBrains Mono\',monospace;font-size:0.62rem;color:#94a3b8;">'
-    "📊 INVESTMENT DASHBOARD · For personal research only. Not financial advice. "
+    "⬛ TERMINAL · For personal research only. Not financial advice. "
     "Data via yfinance / TradingView / RSS. Prices may be delayed 15–20 min. "
     "MCX commodity prices are COMEX proxies (GC=F, SI=F, HG=F)."
     "</div>",
