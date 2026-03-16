@@ -596,21 +596,31 @@ with tab_charts:
     with tv_col2:
         tv_interval = st.selectbox("Interval", ["D", "W", "60", "30", "15", "5", "1"], index=0, key="tv_int")
 
-    tv_html = f"""
-    <div class="tradingview-widget-container" style="height:600px;width:100%;">
-      <div id="tradingview_chart" style="height:100%;width:100%;"></div>
-      <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-      <script type="text/javascript">
-        new TradingView.widget({{
-          "width": "100%", "height": 580,
-          "symbol": "{tv_symbol}", "interval": "{tv_interval}",
-          "timezone": "Asia/Kolkata", "theme": "light", "style": "1",
-          "locale": "en", "toolbar_bg": "#f8f9fb",
-          "enable_publishing": false, "allow_symbol_change": true,
-          "hide_side_toolbar": false, "container_id": "tradingview_chart"
-        }});
-      </script>
-    </div>"""
+    import urllib.parse
+    tv_params = urllib.parse.urlencode({
+        "symbol": tv_symbol,
+        "interval": tv_interval,
+        "timezone": "Asia/Kolkata",
+        "theme": "light",
+        "style": "1",
+        "locale": "en",
+        "toolbar_bg": "#f8f9fb",
+        "enable_publishing": "false",
+        "allow_symbol_change": "true",
+        "hide_side_toolbar": "false",
+        "withdateranges": "true",
+        "save_image": "false",
+        "hide_legend": "false",
+    })
+    tv_iframe_url = f"https://s.tradingview.com/widgetembed/?{tv_params}"
+    tv_html = f'''
+    <iframe
+      src="{tv_iframe_url}"
+      style="width:100%;height:590px;border:none;display:block;border-radius:8px;"
+      allowtransparency="true"
+      scrolling="no"
+      frameborder="0">
+    </iframe>'''
     st.components.v1.html(tv_html, height=600)
 
 
@@ -970,24 +980,32 @@ with tab_tv:
         "Symbol", value="NSE:NIFTY", key="tv2_sym",
         help="Examples: NSE:NIFTY, BSE:SENSEX, NASDAQ:AAPL, COMEX:GC1!, NYMEX:CL1!"
     )
-    tv2_html = f"""
-    <div style="height:700px;width:100%;">
-      <div id="tradingview_adv" style="height:100%;width:100%;"></div>
-      <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-      <script type="text/javascript">
-        new TradingView.widget({{
-          "width": "100%", "height": 680,
-          "symbol": "{tv2_sym}", "interval": "D",
-          "timezone": "Asia/Kolkata", "theme": "light", "style": "1",
-          "locale": "en", "toolbar_bg": "#f8f9fb",
-          "enable_publishing": false, "withdateranges": true,
-          "hide_side_toolbar": false, "allow_symbol_change": true,
-          "studies": ["RSI@tv-basicstudies", "MACD@tv-basicstudies", "BB@tv-basicstudies"],
-          "container_id": "tradingview_adv",
-          "show_popup_button": true, "popup_width": "1000", "popup_height": "650"
-        }});
-      </script>
-    </div>"""
+    import urllib.parse as _ul
+    tv2_params = _ul.urlencode({
+        "symbol": tv2_sym,
+        "interval": "D",
+        "timezone": "Asia/Kolkata",
+        "theme": "light",
+        "style": "1",
+        "locale": "en",
+        "toolbar_bg": "#f8f9fb",
+        "enable_publishing": "false",
+        "withdateranges": "true",
+        "hide_side_toolbar": "false",
+        "allow_symbol_change": "true",
+        "studies": "RSI@tv-basicstudies,MACD@tv-basicstudies,BB@tv-basicstudies",
+        "show_popup_button": "true",
+        "save_image": "false",
+    })
+    tv2_iframe_url = f"https://s.tradingview.com/widgetembed/?{tv2_params}"
+    tv2_html = f'''
+    <iframe
+      src="{tv2_iframe_url}"
+      style="width:100%;height:690px;border:none;display:block;border-radius:8px;"
+      allowtransparency="true"
+      scrolling="no"
+      frameborder="0">
+    </iframe>'''
     st.components.v1.html(tv2_html, height=700)
 
 
@@ -1009,7 +1027,7 @@ with tab_twitter:
     # ── Account list — edit here to add/remove accounts ──────────────────────
     # Format: ("Display Name", "@handle", "short description")
     TWITTER_ACCOUNTS = [
-        ("Redsox Global India", "RedsoxGlobalIndia", "Market insights & trading calls"),
+        ("Redbox Global India", "RedboxGlobalIndia", "Market insights & trading calls"),
         # Add more accounts below this line, e.g.:
         # ("CNBC TV18",        "CNBCTV18News",      "Indian business news"),
         # ("Zerodha",          "zerodhaonline",      "Brokerage & market education"),
