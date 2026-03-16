@@ -64,7 +64,7 @@ st.markdown("""
 
     /* ── Push main content below the sticky ticker bar ── */
     [data-testid="stAppViewContainer"] > .main > .block-container {
-        padding-top: 118px !important;
+        padding-top: 158px !important;
     }
 
     /* ── Sticky ticker bar ── */
@@ -602,9 +602,8 @@ with st.sidebar:
 # =============================================================================
 # MAIN CONTENT AREA
 # =============================================================================
-st.markdown('<div class="dash-title">TERMINAL</div>', unsafe_allow_html=True)
-st.markdown('<div class="dash-subtitle">Markets. Data. Edge.</div>', unsafe_allow_html=True)
-st.markdown("---")
+# Title is shown in sidebar — keeping only a minimal spacer here
+# so the inner sub-tab bar renders cleanly without a large title gap
 
 # =============================================================================
 # SECTION TABS
@@ -2497,147 +2496,97 @@ with tab_overview:
     # =========================================================================
     with intel_fii:
         st.markdown("##### 🏦 FII / DII Flow Tracker")
-        st.caption("Daily provisional institutional flows from NSE India · Refreshed hourly")
+        st.caption(
+            "NSE India blocks direct API access from cloud servers (requires a live browser session). "
+            "Use the links below to view authoritative data, and see the news feed for latest flow headlines."
+        )
 
-        @st.cache_data(ttl=3600)
-        def fetch_fii_dii():
-            import re as _re
-            headers = {
-                "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept":          "application/json, text/plain, */*",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Accept-Encoding": "gzip, deflate, br",
-                "Connection":      "keep-alive",
-                "Referer":         "https://www.nseindia.com/market-data/fii-dii-trading-activity",
-            }
-            try:
-                sess = requests.Session()
-                # Step 1 — get homepage cookie
-                sess.get("https://www.nseindia.com", headers=headers, timeout=10)
-                # Step 2 — visit the page to get page-specific cookie
-                sess.get("https://www.nseindia.com/market-data/fii-dii-trading-activity",
-                         headers=headers, timeout=10)
-                # Step 3 — call the API
-                resp = sess.get(
-                    "https://www.nseindia.com/api/fiidiiTradeReact",
-                    headers=headers, timeout=12
-                )
-                data = resp.json()
-                if not isinstance(data, list) or not data:
-                    return None, f"NSE returned: {str(data)[:200]}"
-
-                rows = []
-                for d in data:
-                    # NSE field names vary — try multiple possible keys
-                    def _f(d, *keys):
-                        for k in keys:
-                            v = d.get(k, d.get(k.lower(), d.get(k.upper())))
-                            if v is not None:
-                                try:
-                                    return float(str(v).replace(",","").strip() or 0)
-                                except Exception:
-                                    pass
-                        return 0.0
-
-                    date_val = (d.get("date") or d.get("Date") or d.get("DATE") or "")
-                    fii_b = _f(d, "fiiBuyValue",  "fii_buy",  "FII_BUY_VALUE",  "buyValue")
-                    fii_s = _f(d, "fiiSellValue", "fii_sell", "FII_SELL_VALUE", "sellValue")
-                    fii_n = _f(d, "fiiNetValue",  "fii_net",  "FII_NET_VALUE",  "netValue")
-                    dii_b = _f(d, "diiBuyValue",  "dii_buy",  "DII_BUY_VALUE")
-                    dii_s = _f(d, "diiSellValue", "dii_sell", "DII_SELL_VALUE")
-                    dii_n = _f(d, "diiNetValue",  "dii_net",  "DII_NET_VALUE")
-
-                    # If net is 0 but buy/sell exist, derive it
-                    if fii_n == 0 and fii_b != 0: fii_n = fii_b - fii_s
-                    if dii_n == 0 and dii_b != 0: dii_n = dii_b - dii_s
-
-                    rows.append({
-                        "Date": date_val,
-                        "FII Buy": fii_b, "FII Sell": fii_s, "FII Net": fii_n,
-                        "DII Buy": dii_b, "DII Sell": dii_s, "DII Net": dii_n,
-                    })
-
-                if not rows:
-                    return None, "No rows parsed"
-
-                df = pd.DataFrame(rows)
-                for fmt in ["%d-%b-%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%Y", "%b %d, %Y"]:
-                    try:
-                        df["Date"] = pd.to_datetime(df["Date"], format=fmt)
-                        break
-                    except Exception:
-                        pass
-                # Check if all net values are 0 — may mean parsing failed
-                if df["FII Net"].abs().sum() == 0 and df["DII Net"].abs().sum() == 0:
-                    # Return raw sample for debugging
-                    return None, f"All values zero. Raw sample: {str(data[0])[:400]}"
-                df = df.sort_values("Date").tail(30).reset_index(drop=True)
-                return df, None
-            except Exception as e:
-                return None, str(e)
-
-        with st.spinner("Fetching FII/DII flows from NSE…"):
-            fii_df, fii_err = fetch_fii_dii()
-
-        if fii_err or fii_df is None:
-            st.warning(f"⚠️ NSE API unavailable: `{fii_err}`")
-            st.markdown(
-                "NSE's API requires a live browser session. "
-                "Click the link below to view directly on NSE:"
-            )
+        # ── Direct source links ───────────────────────────────────────────────
+        link_cols = st.columns(3)
+        with link_cols[0]:
             st.markdown(
                 '<a href="https://www.nseindia.com/market-data/fii-dii-trading-activity" '
-                'target="_blank" style="display:inline-block;background:#0057b8;color:#fff;'
-                'padding:7px 16px;border-radius:6px;font-size:.82rem;font-weight:600;'
-                'text-decoration:none;">📊 Open FII/DII on NSE ↗</a>',
+                'target="_blank" style="display:block;background:#0057b8;color:#fff;'
+                'padding:10px 14px;border-radius:7px;font-size:.82rem;font-weight:600;'
+                'text-decoration:none;text-align:center;">📊 NSE FII/DII Data ↗</a>',
                 unsafe_allow_html=True
             )
+        with link_cols[1]:
+            st.markdown(
+                '<a href="https://www.sebi.gov.in/sebiweb/other/OtherAction.do?doRecognisedFpi=yes" '
+                'target="_blank" style="display:block;background:#059669;color:#fff;'
+                'padding:10px 14px;border-radius:7px;font-size:.82rem;font-weight:600;'
+                'text-decoration:none;text-align:center;">🏛️ SEBI FPI Data ↗</a>',
+                unsafe_allow_html=True
+            )
+        with link_cols[2]:
+            st.markdown(
+                '<a href="https://www.moneycontrol.com/stocks/marketstats/fii_dii_activity/index.php" '
+                'target="_blank" style="display:block;background:#7c3aed;color:#fff;'
+                'padding:10px 14px;border-radius:7px;font-size:.82rem;font-weight:600;'
+                'text-decoration:none;text-align:center;">📈 Moneycontrol FII/DII ↗</a>',
+                unsafe_allow_html=True
+            )
+
+        st.markdown("---")
+
+        # ── Live FII/DII headlines via RSS ────────────────────────────────────
+        st.markdown("**📰 Latest FII/DII Flow Headlines**")
+
+        @st.cache_data(ttl=600)
+        def fetch_fii_news():
+            sources = [
+                ("https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms", "Economic Times"),
+                ("https://www.moneycontrol.com/rss/marketreports.xml", "Moneycontrol"),
+                ("https://feeds.reuters.com/reuters/businessNews", "Reuters"),
+            ]
+            keywords = {"FII","DII","foreign institutional","domestic institutional",
+                        "FPI","FOREIGN PORTFOLIO","institutional buying","institutional selling"}
+            items = []
+            for url, src_name in sources:
+                for item in fetch_rss(url):
+                    title_upper = item["title"].upper()
+                    if any(k.upper() in title_upper for k in keywords):
+                        item["source"] = src_name
+                        items.append(item)
+            items.sort(key=lambda x: x.get("pub_dt") or datetime.min, reverse=True)
+            return items[:25]
+
+        with st.spinner("Fetching FII/DII news headlines…"):
+            fii_news = fetch_fii_news()
+
+        if not fii_news:
+            st.info("No recent FII/DII headlines found. Try refreshing.")
         else:
-            last = fii_df.iloc[-1]
-            m1, m2, m3, m4 = st.columns(4)
-            m1.metric("FII Net Today",  f"₹{last['FII Net']:+,.0f} Cr",
-                      delta_color="normal" if last["FII Net"] >= 0 else "inverse")
-            m2.metric("DII Net Today",  f"₹{last['DII Net']:+,.0f} Cr",
-                      delta_color="normal" if last["DII Net"] >= 0 else "inverse")
-            m3.metric("FII Net 30d",    f"₹{fii_df['FII Net'].sum():+,.0f} Cr")
-            m4.metric("DII Net 30d",    f"₹{fii_df['DII Net'].sum():+,.0f} Cr")
-            st.markdown("---")
+            st.caption(f"{len(fii_news)} headlines · sorted by latest")
+            for item in fii_news:
+                src = item.get("source", "")
+                src_colors = {
+                    "Economic Times": "#e11d48",
+                    "Moneycontrol":   "#7c3aed",
+                    "Reuters":        "#0057b8",
+                }
+                clr = src_colors.get(src, "#64748b")
+                st.markdown(
+                    f'<div class="news-card">'
+                    f'<div style="margin-bottom:3px;">'
+                    f'<span style="background:{clr}20;color:{clr};font-size:.62rem;'
+                    f'font-weight:700;padding:1px 5px;border-radius:3px;'
+                    f'font-family:JetBrains Mono,monospace;">{src}</span></div>'
+                    f'<div class="news-headline">'
+                    f'<a href="{item["link"]}" target="_blank" style="color:#0057b8;text-decoration:none;">'
+                    f'{item["title"]}</a></div>'
+                    f'<div class="news-meta">🕐 {item["published"]}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
 
-            fig_fii = go.Figure()
-            fig_fii.add_trace(go.Bar(
-                x=fii_df["Date"], y=fii_df["FII Net"], name="FII Net",
-                marker_color=[GREEN if v >= 0 else RED for v in fii_df["FII Net"]], opacity=0.85,
-            ))
-            fig_fii.add_trace(go.Bar(
-                x=fii_df["Date"], y=fii_df["DII Net"], name="DII Net",
-                marker_color=[BLUE if v >= 0 else YELLOW for v in fii_df["DII Net"]], opacity=0.85,
-            ))
-            fig_fii.update_layout(**plotly_base_layout(360), barmode="group",
-                title=dict(text="Daily Net FII / DII Flows (₹ Crore) — Last 30 Days",
-                           font=dict(size=12,color="#475569",family="JetBrains Mono")))
-            st.plotly_chart(fig_fii, use_container_width=True)
-
-            fii_df["FII Cum"] = fii_df["FII Net"].cumsum()
-            fii_df["DII Cum"] = fii_df["DII Net"].cumsum()
-            fig_cum = go.Figure()
-            fig_cum.add_trace(go.Scatter(x=fii_df["Date"], y=fii_df["FII Cum"],
-                name="FII Cumulative", line=dict(color=GREEN, width=2)))
-            fig_cum.add_trace(go.Scatter(x=fii_df["Date"], y=fii_df["DII Cum"],
-                name="DII Cumulative", line=dict(color=BLUE, width=2)))
-            fig_cum.add_hline(y=0, line_color="#94a3b8", line_dash="dash", line_width=1)
-            fig_cum.update_layout(**plotly_base_layout(280),
-                title=dict(text="Cumulative 30-Day Net Flow (₹ Crore)",
-                           font=dict(size=12,color="#475569",family="JetBrains Mono")))
-            st.plotly_chart(fig_cum, use_container_width=True)
-
-            with st.expander("📋 Raw Data"):
-                d2 = fii_df.copy()
-                d2["Date"] = d2["Date"].dt.strftime("%d %b %Y")
-                for c in ["FII Buy","FII Sell","FII Net","DII Buy","DII Sell","DII Net"]:
-                    d2[c] = d2[c].apply(lambda x: f"₹{x:,.0f} Cr")
-                st.dataframe(d2[["Date","FII Buy","FII Sell","FII Net",
-                                  "DII Buy","DII Sell","DII Net"]],
-                             use_container_width=True, hide_index=True)
+        st.markdown("---")
+        st.caption(
+            "ℹ️ NSE's `fiidiiTradeReact` API requires a live browser cookie and blocks all "
+            "cloud server IPs. This is a platform restriction, not a code issue. "
+            "The source links above will always work."
+        )
 
     # =========================================================================
     # BLOCK & BULK DEALS
