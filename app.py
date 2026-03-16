@@ -59,47 +59,13 @@ st.markdown("""
 
     /* ── Base ── */
     .stApp { background-color: #f4f6f9; color: #1a202c; font-family: 'Inter', sans-serif; }
-    /* Move sidebar to the right */
-    section[data-testid="stSidebar"] {
-        background-color: #ffffff;
-        border-left: 1px solid #e2e8f0;
-        border-right: none;
-        right: 0 !important;
-        left: auto !important;
-    }
-    /* Sidebar collapse button: move to right side */
-    [data-testid="stSidebarCollapseButton"] {
-        right: 0 !important;
-        left: auto !important;
-    }
-    /* When sidebar open, main content shifts LEFT not right */
-    .stMainBlockContainer { margin-right: 0 !important; }
+    section[data-testid="stSidebar"] { background-color: #ffffff; border-right: 1px solid #e2e8f0; }
     [data-testid="stHeader"] { background-color: #ffffff; border-bottom: 1px solid #e2e8f0; }
 
-    /* ── Push main content below ticker bar and right of watchlist panel ── */
+    /* ── Push main content below the sticky ticker + tab bars ── */
     [data-testid="stAppViewContainer"] > .main > .block-container {
         padding-top: 158px !important;
-        padding-left: 256px !important;   /* watchlist panel (240px) + 16px gap */
-        max-width: 100% !important;
     }
-
-    /* ── Left watchlist panel ── */
-    #wl-panel {
-        position: fixed;
-        top: 104px;       /* header + ticker */
-        left: 0;
-        width: 240px;
-        bottom: 0;
-        z-index: 988;
-        background: #ffffff;
-        border-right: 1px solid #e2e8f0;
-        overflow-y: auto;
-        scrollbar-width: thin;
-        scrollbar-color: #e2e8f0 transparent;
-        box-shadow: 2px 0 8px rgba(0,0,0,0.04);
-    }
-    #wl-panel::-webkit-scrollbar { width: 4px; }
-    #wl-panel::-webkit-scrollbar-thumb { background:#e2e8f0; border-radius:3px; }
 
     /* ── Sticky ticker bar ── */
     #ticker-bar-wrapper {
@@ -508,101 +474,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ── Left watchlist panel — rendered as fixed HTML, refreshed with auto-refresh ─
-if "watchlist" not in st.session_state:
-    st.session_state.watchlist = ["HDFCBANK","RELIANCE","TCS","ICICIBANK","AXISBANK"]
-
-_wl_rows_html = ""
-for _sym in st.session_state.watchlist:
-    _p, _c = fetch_ticker_snapshot(f"{_sym}.NS")
-    _price_str = f"₹{_p:,.2f}" if _p else "—"
-    if _c is None or (isinstance(_c, float) and np.isnan(_c)):
-        _chg_str, _chg_clr = "—", "#94a3b8"
-    elif _c > 0:
-        _chg_str, _chg_clr = f"+{_c:.2f}%", "#16a34a"
-    elif _c < 0:
-        _chg_str, _chg_clr = f"{_c:.2f}%", "#dc2626"
-    else:
-        _chg_str, _chg_clr = "0.00%", "#94a3b8"
-    _wl_rows_html += f"""
-    <div class="wl-row">
-      <span class="wl-sym">{_sym}</span>
-      <div class="wl-nums">
-        <span class="wl-price">{_price_str}</span>
-        <span class="wl-chg" style="color:{_chg_clr};">{_chg_str}</span>
-      </div>
-    </div>"""
-
-_wl_panel_html = f"""
-<div id="wl-panel">
-  <div class="wl-header">
-    <span class="wl-title">👁 Watchlist</span>
-    <span class="wl-count">{len(st.session_state.watchlist)}</span>
-  </div>
-  <div class="wl-body">
-    {_wl_rows_html if _wl_rows_html else '<div class="wl-empty">Add symbols in Portfolio → Watchlist</div>'}
-  </div>
-</div>
-<style>
-  #wl-panel {{
-    position: fixed; top: 104px; left: 0; width: 240px; bottom: 0;
-    z-index: 988; background: #ffffff;
-    border-right: 1px solid #e2e8f0;
-    box-shadow: 2px 0 8px rgba(0,0,0,.04);
-    display: flex; flex-direction: column;
-    font-family: Inter, sans-serif;
-  }}
-  .wl-header {{
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 10px 14px 8px 14px;
-    border-bottom: 2px solid #e2e8f0;
-    background: #ffffff;
-    flex-shrink: 0;
-  }}
-  .wl-title {{
-    font-family: 'JetBrains Mono', monospace;
-    font-size: .7rem; font-weight: 700; color: #1e293b;
-    letter-spacing: .05em; text-transform: uppercase;
-  }}
-  .wl-count {{
-    font-family: 'JetBrains Mono', monospace;
-    font-size: .65rem; color: #94a3b8;
-    background: #f1f5f9; border-radius: 10px;
-    padding: 1px 7px;
-  }}
-  .wl-body {{
-    overflow-y: auto; flex: 1;
-    scrollbar-width: thin; scrollbar-color: #e2e8f0 transparent;
-    padding: 4px 0;
-  }}
-  .wl-body::-webkit-scrollbar {{ width: 3px; }}
-  .wl-body::-webkit-scrollbar-thumb {{ background: #e2e8f0; border-radius: 2px; }}
-  .wl-row {{
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 7px 14px; border-bottom: 1px solid #f8fafc;
-    cursor: default; transition: background .15s;
-  }}
-  .wl-row:hover {{ background: #f8fafc; }}
-  .wl-sym {{
-    font-family: 'JetBrains Mono', monospace;
-    font-size: .75rem; font-weight: 700; color: #1e293b;
-  }}
-  .wl-nums {{ display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }}
-  .wl-price {{
-    font-family: 'JetBrains Mono', monospace;
-    font-size: .72rem; color: #334155; font-weight: 600;
-  }}
-  .wl-chg {{
-    font-family: 'JetBrains Mono', monospace;
-    font-size: .65rem; font-weight: 600;
-  }}
-  .wl-empty {{
-    padding: 20px 14px; font-size: .75rem; color: #94a3b8;
-    text-align: center; line-height: 1.5;
-  }}
-</style>
-"""
-st.markdown(_wl_panel_html, unsafe_allow_html=True)
 
 # ── Sidebar-aware sticky bar: shift left margin dynamically ──────────────────
 st.components.v1.html("""
@@ -625,16 +496,20 @@ st.components.v1.html("""
   function updateTickerBar() {
     var bar = doc.getElementById('ticker-bar-wrapper');
     if (!bar) return;
-    // Sidebar is now on the RIGHT — ticker bar left starts after watchlist panel (240px)
-    var WL_PANEL_W = 240;
-    bar.style.left = WL_PANEL_W + 'px';
+    var w = getSidebarWidth();
+    bar.style.left = w + 'px';
     bar.style.transition = 'left 0.3s ease';
   }
 
   // Run immediately
   updateTickerBar();
 
-  // Sidebar moved to right — no longer affects ticker bar left offset
+  // Watch for sidebar expand/collapse
+  var sidebar = doc.querySelector('[data-testid="stSidebar"]');
+  if (sidebar) {
+    var mo = new MutationObserver(updateTickerBar);
+    mo.observe(sidebar, { attributes: true, attributeFilter: ['aria-expanded', 'style', 'class'] });
+  }
   window.parent.addEventListener('resize', updateTickerBar);
 
   // Poll every 300ms for the first 5 seconds to catch late renders
@@ -717,6 +592,41 @@ with st.sidebar:
     user_rss_1 = st.text_input("Custom Feed #1 URL", value="", placeholder="https://...")
     user_rss_2 = st.text_input("Custom Feed #2 URL", value="", placeholder="https://...")
     user_rss_3 = st.text_input("Custom Feed #3 URL", value="", placeholder="https://...")
+
+    # ── Watchlist in sidebar ─────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown('<div class="section-header">👁️ Watchlist</div>', unsafe_allow_html=True)
+
+    if "watchlist" not in st.session_state:
+        st.session_state.watchlist = ["HDFCBANK","RELIANCE","TCS","ICICIBANK","AXISBANK"]
+
+    # Show live prices for each watchlist stock
+    for _wsym in st.session_state.watchlist:
+        _wp, _wc = fetch_ticker_snapshot(f"{_wsym}.NS")
+        st.metric(
+            label=_wsym,
+            value=f"₹{_wp:,.2f}" if _wp else "—",
+            delta=fmt_pct(_wc)
+        )
+
+    # Add symbol
+    with st.form(key="wl_sidebar_form", clear_on_submit=True):
+        _wadd = st.text_input("Add to watchlist", placeholder="e.g. INFY",
+                              label_visibility="collapsed", key="wl_sidebar_input")
+        if st.form_submit_button("➕ Add", use_container_width=True):
+            s = _wadd.strip().upper()
+            if s and s not in st.session_state.watchlist:
+                st.session_state.watchlist.append(s)
+                st.rerun()
+
+    # Remove symbol
+    if st.session_state.watchlist:
+        _wrem = st.selectbox("Remove symbol", ["—"] + st.session_state.watchlist,
+                             key="wl_sidebar_remove", label_visibility="collapsed")
+        if _wrem and _wrem != "—":
+            if st.button(f"🗑️ Remove {_wrem}", use_container_width=True, key="wl_rem_btn"):
+                st.session_state.watchlist = [s for s in st.session_state.watchlist if s != _wrem]
+                st.rerun()
 
     st.markdown("---")
     st.markdown('<div class="section-header">🕐 Last Updated</div>', unsafe_allow_html=True)
@@ -2504,7 +2414,7 @@ st.components.v1.html("""
     if (!stuck) {
       tabBar.style.position  = 'fixed';
       tabBar.style.top       = TICKER_H + 'px';
-      tabBar.style.left      = '240px'; // watchlist panel width
+      tabBar.style.left      = getSidebarWidth() + 'px';
       tabBar.style.right     = '0';
       tabBar.style.zIndex    = '989';
       tabBar.style.background = '#ffffff';
@@ -2554,7 +2464,7 @@ st.components.v1.html("""
 
   function updateTabBarLeft() {
     if (stuck && tabBar) {
-      tabBar.style.left = '240px'; // watchlist panel width; sidebar is on right
+      tabBar.style.left = getSidebarWidth() + 'px';
     }
   }
 
@@ -2864,45 +2774,7 @@ with tab_overview:
     # =========================================================================
     # WATCHLIST
     # =========================================================================
-    # ── Watchlist now lives in the left panel — manage it here ──────────────
-    # The left panel shows live prices automatically.
-    # Use the form below to add or remove symbols.
-    with tab_overview:
-        st.markdown("---")
-        st.markdown("#### 👁 Manage Watchlist")
-        st.caption("Symbols added here appear in the left panel with live prices.")
-
-        with st.form(key="wl_add_form", clear_on_submit=True):
-            wfa, wfb = st.columns([4, 1])
-            with wfa:
-                new_sym = st.text_input(
-                    "Add symbol", placeholder="e.g. INFY, BAJFINANCE, TITAN",
-                    label_visibility="collapsed", key="wl_form_input"
-                )
-            with wfb:
-                submitted = st.form_submit_button("➕ Add", use_container_width=True)
-            if submitted and new_sym.strip():
-                s = new_sym.strip().upper()
-                if s not in st.session_state.watchlist:
-                    st.session_state.watchlist.append(s)
-                    st.rerun()
-
-        if st.session_state.watchlist:
-            wr1, wr2 = st.columns([4, 1])
-            with wr1:
-                to_remove = st.multiselect(
-                    "Remove symbols", st.session_state.watchlist,
-                    key="wl_remove_multi", label_visibility="collapsed",
-                    placeholder="Select to remove…"
-                )
-            with wr2:
-                st.markdown("<div style='height:26px'></div>", unsafe_allow_html=True)
-                if st.button("🗑️ Remove", use_container_width=True, key="wl_remove_btn"):
-                    if to_remove:
-                        st.session_state.watchlist = [
-                            s for s in st.session_state.watchlist if s not in to_remove
-                        ]
-                        st.rerun()
+    # Watchlist is managed in the sidebar — nothing needed here
 
 
 # FOOTER
