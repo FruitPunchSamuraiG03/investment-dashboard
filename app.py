@@ -1009,7 +1009,7 @@ with tab_twitter:
     # ── Account list — edit here to add/remove accounts ──────────────────────
     # Format: ("Display Name", "@handle", "short description")
     TWITTER_ACCOUNTS = [
-        ("RedboxGlobal India", "Market insights & trading calls"),
+        ("Redsox Global India", "RedsoxGlobalIndia", "Market insights & trading calls"),
         # Add more accounts below this line, e.g.:
         # ("CNBC TV18",        "CNBCTV18News",      "Indian business news"),
         # ("Zerodha",          "zerodhaonline",      "Brokerage & market education"),
@@ -1025,6 +1025,9 @@ with tab_twitter:
 
         for row in rows:
             cols = st.columns(len(row))
+            # st.columns(1) returns a single object in some Streamlit versions — normalise to list
+            if not isinstance(cols, list):
+                cols = [cols]
             for col, (display_name, handle, desc) in zip(cols, row):
                 with col:
                     st.markdown(f"**{display_name}**")
