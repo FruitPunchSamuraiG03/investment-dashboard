@@ -501,7 +501,7 @@ st.components.v1.html("""
 # SIDEBAR — Controls + Mini Market Ticker
 # =============================================================================
 with st.sidebar:
-    st.markdown('<div class="dash-title">📊 MKTS</div>', unsafe_allow_html=True)
+    st.markdown('<div class="dash-title">📊 Markets</div>', unsafe_allow_html=True)
     st.markdown('<div class="dash-subtitle">Investment Command Center</div>', unsafe_allow_html=True)
     st.markdown("---")
 
@@ -537,7 +537,19 @@ with st.sidebar:
 
     # ── US Markets ─────────────────────────────────────────────────────────────
     st.markdown('<div class="section-header">🇺🇸 US Markets</div>', unsafe_allow_html=True)
-    for label, sym in {"S&P 500": "^GSPC", "Nasdaq 100": "^IXIC"}.items():
+    for label, sym in {"S&P 500": "^GSPC", "Nasdaq 100": "^IXIC", "Dow Jones": "^DJI", "Russell 2000": "^RUT"}.items():
+        price, chg = fetch_ticker_snapshot(sym)
+        st.metric(label=label, value=fmt_price(price), delta=fmt_pct(chg))
+
+    # ── European Indices ───────────────────────────────────────────────────────
+    st.markdown('<div class="section-header">🇪🇺 Europe</div>', unsafe_allow_html=True)
+    for label, sym in {"DAX (Germany)": "^GDAXI", "FTSE 100 (UK)": "^FTSE", "CAC 40 (France)": "^FCHI"}.items():
+        price, chg = fetch_ticker_snapshot(sym)
+        st.metric(label=label, value=fmt_price(price), delta=fmt_pct(chg))
+
+    # ── Asian Indices ──────────────────────────────────────────────────────────
+    st.markdown('<div class="section-header">🌏 Asia</div>', unsafe_allow_html=True)
+    for label, sym in {"Nikkei 225 (JP)": "^N225", "Hang Seng (HK)": "^HSI", "Kospi (Korea)": "^KS11"}.items():
         price, chg = fetch_ticker_snapshot(sym)
         st.metric(label=label, value=fmt_price(price), delta=fmt_pct(chg))
 
@@ -596,31 +608,38 @@ with tab_charts:
     with tv_col2:
         tv_interval = st.selectbox("Interval", ["D", "W", "60", "30", "15", "5", "1"], index=0, key="tv_int")
 
-    import urllib.parse
-    tv_params = urllib.parse.urlencode({
-        "symbol": tv_symbol,
-        "interval": tv_interval,
-        "timezone": "Asia/Kolkata",
-        "theme": "light",
-        "style": "1",
-        "locale": "en",
-        "toolbar_bg": "#f8f9fb",
-        "enable_publishing": "false",
-        "allow_symbol_change": "true",
-        "hide_side_toolbar": "false",
-        "withdateranges": "true",
-        "save_image": "false",
-        "hide_legend": "false",
+    import urllib.parse as _up1
+    # frameElementId is required by TradingView widgetembed to render the chart
+    # Without it, the embed shows only the symbol label with no chart
+    _tv1_params = _up1.urlencode({
+        "frameElementId": "tv_chart_tab1",
+        "symbol":         tv_symbol,
+        "interval":       tv_interval,
+        "timezone":       "Asia/Kolkata",
+        "theme":          "light",
+        "style":          "1",
+        "locale":         "en",
+        "toolbar_bg":     "f8f9fb",
+        "hide_side_toolbar": "0",
+        "allow_symbol_change": "1",
+        "withdateranges": "1",
+        "save_image":     "1",
+        "hideideas":      "1",
     })
-    tv_iframe_url = f"https://s.tradingview.com/widgetembed/?{tv_params}"
-    tv_html = f'''
-    <iframe
-      src="{tv_iframe_url}"
-      style="width:100%;height:590px;border:none;display:block;border-radius:8px;"
-      allowtransparency="true"
-      scrolling="no"
-      frameborder="0">
-    </iframe>'''
+    tv_html = f'''<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>html,body{{margin:0;padding:0;background:#fff;}}
+iframe{{border:none;border-radius:8px;display:block;}}
+</style></head>
+<body>
+<iframe id="tv_chart_tab1"
+  src="https://s.tradingview.com/widgetembed/?{_tv1_params}"
+  width="100%" height="590"
+  frameborder="0" scrolling="no"
+  allowtransparency="true"
+  allowfullscreen>
+</iframe>
+</body></html>'''
     st.components.v1.html(tv_html, height=600)
 
 
@@ -1050,49 +1069,43 @@ with tab_twitter:
                 with col:
                     st.markdown(f"**{display_name}**")
                     st.caption(f"@{handle} · {desc}")
-                    twitter_embed = f"""
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
+                    # Twitter syndication iframe — renders directly, no JS required,
+                    # works inside Streamlit's sandboxed iframes without ad-blocker issues.
+                    import urllib.parse as _twp
+                    _tw_params = _twp.urlencode({
+                        "dnt":            "true",
+                        "lang":           "en",
+                        "theme":          "light",
+                        "chrome":         "noheader nofooter noborders transparent",
+                        "link_color":     "#0057b8",
+                        "border_color":   "#e2e8f0",
+                        "tweet_limit":    "10",
+                        "show_replies":   "false",
+                        "origin":         "https://publish.twitter.com",
+                    })
+                    twitter_embed = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8">
 <style>
-  body {{ margin: 0; padding: 0; background: #f4f6f9; font-family: 'Inter', sans-serif; }}
-  .twitter-wrap {{
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    overflow: hidden;
-    background: #ffffff;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-  }}
-  .twitter-timeline {{ border-radius: 12px !important; }}
-  .loading-msg {{
-    padding: 40px 20px;
-    text-align: center;
-    color: #94a3b8;
-    font-size: 0.82rem;
-  }}
-</style>
-</head>
+  html,body{{margin:0;padding:0;background:#f4f6f9;}}
+  .wrap{{border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.06);}}
+  .fallback{{padding:30px 20px;text-align:center;font-family:Inter,sans-serif;}}
+  .fallback a{{color:#0057b8;font-weight:600;font-size:.9rem;text-decoration:none;}}
+  .fallback p{{color:#94a3b8;font-size:.78rem;margin-top:8px;}}
+</style></head>
 <body>
-<div class="twitter-wrap">
-  <div class="loading-msg" id="loading-{handle}">Loading @{handle}…</div>
-  <a class="twitter-timeline"
-     data-screen-name="{handle}"
-     data-tweet-limit="8"
-     data-chrome="noheader nofooter noborders"
-     data-theme="light"
-     data-link-color="#0057b8"
-     href="https://twitter.com/{handle}">
-  </a>
+<div class="wrap">
+  <iframe
+    src="https://syndication.twitter.com/srv/timeline-profile/screen-name/{handle}?{_tw_params}"
+    width="100%" height="640"
+    frameborder="0" scrolling="yes"
+    allowtransparency="true">
+    <div class="fallback">
+      <a href="https://twitter.com/{handle}" target="_blank">@{handle} on X/Twitter ↗</a>
+      <p>Timeline embed unavailable — click to open directly.</p>
+    </div>
+  </iframe>
 </div>
-<script>
-  document.getElementById('loading-{handle}').style.display = 'block';
-</script>
-<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"
-  onload="document.getElementById('loading-{handle}').style.display='none';">
-</script>
-</body>
-</html>
+</body></html>
 """
                     st.components.v1.html(twitter_embed, height=680, scrolling=True)
 
