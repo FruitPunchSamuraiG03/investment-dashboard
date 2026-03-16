@@ -273,9 +273,9 @@ def fetch_ticker_bar_batch():
         "GIFT NIFTY": "GIFTTY=F",
         "SPX":        "^GSPC",
         "BTC":        "BTC-USD",
-        "GOLD MCX":   "GC=F",       # COMEX proxy — tracks MCX gold closely
-        "SILVER MCX": "SI=F",       # COMEX proxy
-        "COPPER MCX": "HG=F",       # COMEX proxy
+        "GOLD":       "GC=F",       # COMEX proxy — tracks MCX gold closely
+        "SILVER":     "SI=F",       # COMEX proxy
+        "COPPER":     "HG=F",       # COMEX proxy
         "USD/INR":    "USDINR=X",
         "EUR/USD":    "EURUSD=X",
     }
@@ -448,6 +448,55 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# ── Sidebar-aware sticky bar: shift left margin dynamically ──────────────────
+st.components.v1.html("""
+<script>
+(function() {
+  // Streamlit renders inside an iframe; we need to reach the parent document
+  var doc = window.parent.document;
+
+  function getSidebarWidth() {
+    var sb = doc.querySelector('[data-testid="stSidebar"]');
+    if (!sb) return 0;
+    var style = window.parent.getComputedStyle(sb);
+    // If sidebar is collapsed its width collapses to ~0 or it gets aria-expanded=false
+    var expanded = sb.getAttribute('aria-expanded');
+    if (expanded === 'false') return 0;
+    // measure actual rendered width
+    return sb.getBoundingClientRect().width || 0;
+  }
+
+  function updateTickerBar() {
+    var bar = doc.getElementById('ticker-bar-wrapper');
+    if (!bar) return;
+    var w = getSidebarWidth();
+    bar.style.left = w + 'px';
+    bar.style.transition = 'left 0.3s ease';
+  }
+
+  // Run immediately
+  updateTickerBar();
+
+  // Watch for sidebar expand/collapse via MutationObserver
+  var sidebar = doc.querySelector('[data-testid="stSidebar"]');
+  if (sidebar) {
+    var mo = new MutationObserver(updateTickerBar);
+    mo.observe(sidebar, { attributes: true, attributeFilter: ['aria-expanded', 'style', 'class'] });
+  }
+
+  // Also watch for any DOM resize (window resize covers mobile rotations)
+  window.parent.addEventListener('resize', updateTickerBar);
+
+  // Poll every 300ms for the first 5 seconds to catch late renders
+  var count = 0;
+  var poll = setInterval(function() {
+    updateTickerBar();
+    if (++count > 16) clearInterval(poll);
+  }, 300);
+})();
+</script>
+""", height=0)
+
 # =============================================================================
 # SIDEBAR — Controls + Mini Market Ticker
 # =============================================================================
@@ -522,13 +571,14 @@ st.markdown("---")
 # =============================================================================
 # SECTION TABS
 # =============================================================================
-tab_charts, tab_technicals, tab_breadth, tab_news, tab_calendar, tab_tv = st.tabs([
+tab_charts, tab_technicals, tab_breadth, tab_news, tab_calendar, tab_tv, tab_twitter = st.tabs([
     "📈 Live Chart",
     "🔬 Technicals",
     "🌡️ Breadth",
     "📰 News",
     "📅 Calendar",
     "📺 TradingView",
+    "🐦 Twitter",
 ])
 
 # =============================================================================
@@ -939,6 +989,101 @@ with tab_tv:
       </script>
     </div>"""
     st.components.v1.html(tv2_html, height=700)
+
+
+# =============================================================================
+# TAB 7 — Twitter / X Feed
+# =============================================================================
+# TO ADD MORE ACCOUNTS: copy a <twitter-timeline> block below and change
+# the `data-screen-name` attribute to the new @handle.
+# Requires NO API key — uses Twitter's free public embed widget.
+# =============================================================================
+with tab_twitter:
+    st.markdown("#### 🐦 Twitter / X — Curated Market Feeds")
+    st.caption(
+        "Live embedded feeds via Twitter's public widget. "
+        "No API key needed. Updates automatically. "
+        "**To add an account:** edit `app.py` and add a new `<twitter-timeline>` block."
+    )
+
+    # ── Account list — edit here to add/remove accounts ──────────────────────
+    # Format: ("Display Name", "@handle", "short description")
+    TWITTER_ACCOUNTS = [
+        ("Redsox Global India", "RedsoxGlobalIndia", "Market insights & trading calls"),
+        # Add more accounts below this line, e.g.:
+        # ("CNBC TV18",        "CNBCTV18News",      "Indian business news"),
+        # ("Zerodha",          "zerodhaonline",      "Brokerage & market education"),
+    ]
+    # ─────────────────────────────────────────────────────────────────────────
+
+    if not TWITTER_ACCOUNTS:
+        st.info("No accounts configured. Add handles to the `TWITTER_ACCOUNTS` list in `app.py`.")
+    else:
+        # Render one column per account (max 3 per row)
+        COLS_PER_ROW = min(len(TWITTER_ACCOUNTS), 3)
+        rows = [TWITTER_ACCOUNTS[i:i+COLS_PER_ROW] for i in range(0, len(TWITTER_ACCOUNTS), COLS_PER_ROW)]
+
+        for row in rows:
+            cols = st.columns(len(row))
+            for col, (display_name, handle, desc) in zip(cols, row):
+                with col:
+                    st.markdown(f"**{display_name}**")
+                    st.caption(f"@{handle} · {desc}")
+                    twitter_embed = f"""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body {{ margin: 0; padding: 0; background: #f4f6f9; font-family: 'Inter', sans-serif; }}
+  .twitter-wrap {{
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #ffffff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }}
+  .twitter-timeline {{ border-radius: 12px !important; }}
+  .loading-msg {{
+    padding: 40px 20px;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 0.82rem;
+  }}
+</style>
+</head>
+<body>
+<div class="twitter-wrap">
+  <div class="loading-msg" id="loading-{handle}">Loading @{handle}…</div>
+  <a class="twitter-timeline"
+     data-screen-name="{handle}"
+     data-tweet-limit="8"
+     data-chrome="noheader nofooter noborders"
+     data-theme="light"
+     data-link-color="#0057b8"
+     href="https://twitter.com/{handle}">
+  </a>
+</div>
+<script>
+  document.getElementById('loading-{handle}').style.display = 'block';
+</script>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"
+  onload="document.getElementById('loading-{handle}').style.display='none';">
+</script>
+</body>
+</html>
+"""
+                    st.components.v1.html(twitter_embed, height=680, scrolling=True)
+
+        st.markdown("---")
+        st.markdown(
+            '<div style="font-size:0.72rem;color:#94a3b8;font-family:\'JetBrains Mono\',monospace;">'
+            "⚠️ Twitter embeds require the browser to load scripts from platform.twitter.com. "
+            "If feeds show blank, disable ad-blockers for your dashboard URL. "
+            "Feeds are public — no login required."
+            "</div>",
+            unsafe_allow_html=True
+        )
 
 
 # =============================================================================
