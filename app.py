@@ -1584,37 +1584,278 @@ with tab_holdings:
 
             st.markdown("---")
 
-            # ── Company News ───────────────────────────────────────────────────
-            st.markdown("##### Company News")
-            st.caption("Latest news for your top 8 holdings by value.")
+            st.markdown("---")
 
-            top8 = df_h.head(8)["Symbol"].tolist()
-            news_cols = st.columns(2)
-            for i, sym in enumerate(top8):
-                with news_cols[i % 2]:
-                    st.markdown(
-                        f'<div style="font-size:.82rem;font-weight:700;color:#1e293b;'
-                        f'font-family:Inter,sans-serif;margin:10px 0 4px 0;">'
-                        f'📰 {sym}</div>',
-                        unsafe_allow_html=True
+            # ── Red Flags & Buy/Hold/Sell Signals ─────────────────────────────
+            st.markdown("##### 🚨 Red Flags & Signals")
+            st.caption("Automated screening: pledged shares, returns, RSI, MACD, 200 EMA. Not financial advice.")
+
+            @st.cache_data(ttl=300)
+            def get_signals_for_symbol(sym):
+                try:
+                    df_t = yf.download(f"{sym}.NS", period="1y", interval="1d",
+                                       progress=False, auto_adjust=True)
+                    if df_t.empty or len(df_t) < 30:
+                        return None
+                    close = df_t["Close"].squeeze()
+                    delta = close.diff()
+                    gain  = delta.clip(lower=0).ewm(com=13, min_periods=14).mean()
+                    loss  = (-delta.clip(upper=0)).ewm(com=13, min_periods=14).mean()
+                    rsi   = float((100 - 100/(1 + gain/loss.replace(0, 0.0001))).iloc[-1])
+                    ema200 = float(close.ewm(span=200, adjust=False).mean().iloc[-1])
+                    ltp    = float(close.iloc[-1])
+                    macd   = close.ewm(span=12,adjust=False).mean() - close.ewm(span=26,adjust=False).mean()
+                    sig_ln = macd.ewm(span=9, adjust=False).mean()
+                    return {
+                        "rsi":       round(rsi,1),
+                        "above_ema": ltp > ema200,
+                        "macd_bull": bool(macd.iloc[-1]>sig_ln.iloc[-1] and macd.iloc[-2]<=sig_ln.iloc[-2]),
+                        "macd_bear": bool(macd.iloc[-1]<sig_ln.iloc[-1] and macd.iloc[-2]>=sig_ln.iloc[-2]),
+                        "macd_pos":  bool(macd.iloc[-1] > 0),
+                    }
+                except Exception:
+                    return None
+
+            def compute_signal(sig, ret_pct, pledge_pct):
+                if sig is None:
+                    return "HOLD", 0
+                score = 0
+                if sig["above_ema"]: score += 2
+                else:                score -= 2
+                if sig["rsi"] < 40:  score += 2
+                elif sig["rsi"] > 70:score -= 2
+                if sig["macd_bull"]: score += 2
+                if sig["macd_bear"]: score -= 2
+                if sig["macd_pos"]:  score += 1
+                else:                score -= 1
+                if ret_pct > 50:     score += 1
+                if ret_pct < -20:    score -= 1
+                if pledge_pct > 50:  score -= 2
+                if score >= 4:  return "BUY",  score
+                if score <= -2: return "SELL", score
+                return "HOLD", score
+
+            rf_rows = []
+            pledge_col_m = "Quantity Pledged (Margin)" if "Quantity Pledged (Margin)" in df_h.columns else None
+            pledge_col_l = "Quantity Pledged (Loan)"   if "Quantity Pledged (Loan)"   in df_h.columns else None
+            prog = st.progress(0, text="Analysing holdings…")
+
+            for i, row in df_h.iterrows():
+                sym     = row["Symbol"]
+                ret_pct = float(row.get("Return %", 0) or 0)
+                qty     = float(row.get("Qty", 1) or 1)
+                pm = float(str(row.get(pledge_col_m, 0) or 0)) if pledge_col_m else 0
+                pl = float(str(row.get(pledge_col_l, 0) or 0)) if pledge_col_l else 0
+                pledge_pct = (pm + pl) / qty * 100
+
+                sig            = get_signals_for_symbol(sym)
+                label, score   = compute_signal(sig, ret_pct, pledge_pct)
+
+                flags = []
+                if pledge_pct > 70: flags.append(f"🔴 Pledge {pledge_pct:.0f}%")
+                elif pledge_pct > 30: flags.append(f"🟡 Pledge {pledge_pct:.0f}%")
+                if ret_pct < -25:   flags.append(f"🔴 Loss {ret_pct:+.1f}%")
+                elif ret_pct < -15: flags.append(f"🟡 Loss {ret_pct:+.1f}%")
+                if sig:
+                    if not sig["above_ema"]:  flags.append("🔴 Below 200EMA")
+                    if sig["rsi"] > 75:       flags.append(f"🟡 RSI overbought {sig['rsi']}")
+                    if sig["rsi"] < 25:       flags.append(f"🟡 RSI oversold {sig['rsi']}")
+                    if sig["macd_bear"]:      flags.append("🟡 MACD bearish cross")
+
+                rf_rows.append({
+                    "Symbol":    sym,
+                    "Sector":    row.get("Sector",""),
+                    "Signal":    label,
+                    "Score":     score,
+                    "RSI":       sig["rsi"] if sig else "—",
+                    "vs 200EMA": ("Above" if sig["above_ema"] else "Below") if sig else "—",
+                    "Pledged%":  f"{pledge_pct:.0f}%",
+                    "Red Flags": " · ".join(flags) if flags else "✅ None",
+                })
+                prog.progress((i+1)/len(df_h), text=f"Analysing {sym}…")
+
+            prog.empty()
+            rf_df = pd.DataFrame(rf_rows).sort_values("Score", ascending=True)
+
+            def _sc(val):
+                if val == "BUY":  return "color:#16a34a;font-weight:700"
+                if val == "SELL": return "color:#dc2626;font-weight:700"
+                if val == "HOLD": return "color:#d97706;font-weight:700"
+                return ""
+            def _fc(val):
+                if "🔴" in str(val): return "color:#dc2626"
+                if "🟡" in str(val): return "color:#d97706"
+                if "✅" in str(val): return "color:#16a34a"
+                return ""
+
+            st.dataframe(
+                rf_df.style.applymap(_sc, subset=["Signal"]).applymap(_fc, subset=["Red Flags"]),
+                use_container_width=True,
+                height=min(60+len(rf_df)*36, 520),
+                hide_index=True,
+            )
+            st.caption("Score ≥4 = BUY · ≤−2 = SELL · else HOLD. Screening only — not financial advice.")
+
+            st.markdown("---")
+
+            # ── Portfolio News Feed — All Holdings ────────────────────────────
+            st.markdown("##### 📰 Portfolio News Feed")
+            st.caption("All holdings · Yahoo Finance · Mint · Business Standard · NSE Announcements")
+
+            @st.cache_data(ttl=300)
+            def fetch_portfolio_news(symbols_tuple):
+                import re as _re
+                all_items = []
+                sym_set = set(s.upper() for s in symbols_tuple)
+
+                # Yahoo Finance RSS per symbol
+                for sym in symbols_tuple:
+                    url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={sym}.NS&region=IN&lang=en-IN"
+                    for item in fetch_rss(url):
+                        item["symbol"]      = sym
+                        item["source_type"] = "Yahoo Finance"
+                        all_items.append(item)
+
+                # Mint RSS (filter by symbol match in title)
+                for url in ["https://www.livemint.com/rss/markets",
+                            "https://www.livemint.com/rss/companies"]:
+                    for item in fetch_rss(url):
+                        txt = item["title"].upper()
+                        m = next((s for s in sym_set if s in txt), None)
+                        if m:
+                            item["symbol"]      = m
+                            item["source_type"] = "Mint"
+                            all_items.append(item)
+
+                # Business Standard RSS (filter by symbol match in title)
+                for url in ["https://www.business-standard.com/rss/markets-106.rss",
+                            "https://www.business-standard.com/rss/companies-101.rss"]:
+                    for item in fetch_rss(url):
+                        txt = item["title"].upper()
+                        m = next((s for s in sym_set if s in txt), None)
+                        if m:
+                            item["symbol"]      = m
+                            item["source_type"] = "Business Standard"
+                            all_items.append(item)
+
+                # NSE Corporate Announcements API
+                nse_hdrs = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                    "Accept": "application/json, text/plain, */*",
+                    "Referer": "https://www.nseindia.com/",
+                    "Accept-Language": "en-US,en;q=0.9",
+                }
+                try:
+                    sess = requests.Session()
+                    sess.get("https://www.nseindia.com", headers=nse_hdrs, timeout=6)
+                    for sym in symbols_tuple:
+                        try:
+                            url  = f"https://www.nseindia.com/api/corp-info?symbol={sym}&corpType=announcements&FMTType=0"
+                            resp = sess.get(url, headers=nse_hdrs, timeout=7)
+                            anns = resp.json()
+                            for ann in (anns.get("annDetails") or anns.get("data") or [])[:6]:
+                                title = ann.get("subject") or ann.get("headline","")
+                                link  = ann.get("attchmntFile","")
+                                if link and not link.startswith("http"):
+                                    link = f"https://www.nseindia.com{link}"
+                                pub_str = ann.get("exchdisstime","") or ann.get("date","")
+                                pub_dt  = None
+                                try:
+                                    from datetime import datetime as _dt
+                                    pub_dt  = _dt.strptime(pub_str[:16], "%d-%b-%Y %H:%M")
+                                    pub_str = pub_dt.strftime("%d %b %Y  %H:%M")
+                                except Exception:
+                                    pass
+                                if title:
+                                    all_items.append({
+                                        "title":       title,
+                                        "link":        link or f"https://www.nseindia.com/get-quotes/equity?symbol={sym}",
+                                        "published":   pub_str or "—",
+                                        "pub_dt":      pub_dt,
+                                        "source":      "NSE",
+                                        "source_type": "NSE",
+                                        "symbol":      sym,
+                                    })
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
+                # Deduplicate and sort
+                seen, unique = set(), []
+                for item in all_items:
+                    k = item["title"][:60].lower().strip()
+                    if k not in seen:
+                        seen.add(k)
+                        unique.append(item)
+                unique.sort(key=lambda x: x.get("pub_dt") or datetime.min, reverse=True)
+                return unique
+
+            SOURCE_COLORS = {
+                "Yahoo Finance":     "#0057b8",
+                "Mint":              "#e11d48",
+                "Business Standard": "#7c3aed",
+                "NSE":               "#059669",
+            }
+
+            with st.spinner("Fetching news from all sources…"):
+                all_news = fetch_portfolio_news(tuple(df_h["Symbol"].tolist()))
+
+            if not all_news:
+                st.info("No news found. Feeds may be temporarily unavailable — try refreshing.")
+            else:
+                st.caption(f"{len(all_news)} articles fetched")
+                cards_html = ""
+                for item in all_news[:150]:
+                    sym       = item.get("symbol","")
+                    src_type  = item.get("source_type","News")
+                    badge_clr = SOURCE_COLORS.get(src_type, "#64748b")
+                    sym_badge = (
+                        f'<span style="background:#e0f2fe;color:#0057b8;font-size:.62rem;'
+                        f'font-weight:700;padding:1px 6px;border-radius:4px;'
+                        f'font-family:JetBrains Mono,monospace;margin-right:5px;">{sym}</span>'
+                    ) if sym else ""
+                    src_badge = (
+                        f'<span style="background:{badge_clr}22;color:{badge_clr};'
+                        f'font-size:.62rem;font-weight:700;padding:1px 6px;border-radius:4px;'
+                        f'font-family:JetBrains Mono,monospace;">{src_type}</span>'
                     )
-                    items = fetch_stock_news(sym)
-                    if not items:
-                        st.caption("No news found.")
-                    else:
-                        for item in items[:3]:
-                            st.markdown(
-                                f'<div class="news-card" style="margin-bottom:6px;">'
-                                f'<div class="news-headline">'
-                                f'<a href="{item["link"]}" target="_blank" '
-                                f'style="color:#0057b8;text-decoration:none;font-size:.82rem;">'
-                                f'{item["title"]}</a></div>'
-                                f'<div class="news-meta">🕐 {item["published"]}</div>'
-                                f'</div>',
-                                unsafe_allow_html=True
-                            )
+                    cards_html += f"""<div style="background:#fff;border:1px solid #e2e8f0;
+                        border-radius:8px;padding:10px 14px;margin-bottom:7px;
+                        box-shadow:0 1px 3px rgba(0,0,0,.03);">
+                      <div style="margin-bottom:4px;">{sym_badge}{src_badge}</div>
+                      <div style="font-size:.84rem;font-weight:600;line-height:1.4;color:#1e293b;">
+                        <a href="{item['link']}" target="_blank"
+                           style="color:#0057b8;text-decoration:none;">{item['title']}</a>
+                      </div>
+                      <div style="font-size:.67rem;color:#94a3b8;margin-top:4px;
+                                  font-family:JetBrains Mono,monospace;">
+                        🕐 {item['published']}
+                      </div>
+                    </div>"""
+
+                news_html = """<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{background:#f4f6f9;font-family:Inter,sans-serif;}
+  .feed{height:780px;overflow-y:auto;padding:12px 14px;
+        scrollbar-width:thin;scrollbar-color:#cbd5e0 transparent;}
+  .feed::-webkit-scrollbar{width:5px;}
+  .feed::-webkit-scrollbar-thumb{background:#cbd5e0;border-radius:4px;}
+</style></head><body>
+<div class="feed">""" + cards_html + """</div></body></html>"""
+
+                st.components.v1.html(news_html, height=800, scrolling=False)
 
     st.markdown("---")
+    st.markdown(
+        '<div style="font-size:.72rem;color:#94a3b8;font-family:JetBrains Mono,monospace;">'
+        "💼 Holdings XLSX from Zerodha Console → Portfolio → Holdings → Download · "
+        "Live LTP via yfinance · News: Yahoo Finance, Mint, Business Standard, NSE · "
+        "Signals: automated screening only — not financial advice."
+        '</div>',
+        unsafe_allow_html=True
+    )
     st.markdown(
         '<div style="font-size:.72rem;color:#94a3b8;font-family:JetBrains Mono,monospace;">'
         "💼 Upload Zerodha Holdings XLSX from Console → Portfolio → Holdings → Download · "
