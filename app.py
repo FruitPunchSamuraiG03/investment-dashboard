@@ -20,12 +20,6 @@ import warnings
 import requests
 warnings.filterwarnings("ignore")
 
-# ── Optional Kite Connect ─────────────────────────────────────────────────────
-try:
-    from kiteconnect import KiteConnect
-    KITE_AVAILABLE = True
-except ImportError:
-    KITE_AVAILABLE = False
 
 # ── Optional auto-refresh ──────────────────────────────────────────────────────
 try:
@@ -516,68 +510,6 @@ st.components.v1.html("""
 with st.sidebar:
     st.markdown('<div class="dash-title">⬛ TERMINAL</div>', unsafe_allow_html=True)
     st.markdown('<div class="dash-subtitle">Markets · Data · Intelligence</div>', unsafe_allow_html=True)
-    st.markdown("---")
-
-    # ── Zerodha Portfolio Login (TOP of sidebar) ──────────────────────────────
-    st.markdown('<div class="section-header">📊 Zerodha Portfolio</div>', unsafe_allow_html=True)
-
-    # Load API key from Streamlit Secrets
-    kite_api_key = st.secrets.get("KITE_API_KEY", "") if hasattr(st, "secrets") else ""
-
-    if not kite_api_key:
-        st.caption("⚠️ Add KITE_API_KEY to Streamlit Secrets to enable.")
-    elif not KITE_AVAILABLE:
-        st.caption("⚠️ kiteconnect not installed. Check requirements.txt.")
-    else:
-        # Build login URL manually — avoids kiteconnect library version
-        # incompatibilities that cause "Invalid api_key" errors.
-        # Publisher plan redirects directly to access_token in the URL.
-        _login_url = f"https://kite.zerodha.com/connect/login?v=3&api_key={kite_api_key}"
-
-        if "kite_access_token" not in st.session_state:
-            st.markdown(
-                f'<a href="{_login_url}" target="_blank" '
-                f'style="display:inline-block;width:100%;text-align:center;'
-                f'background:#387ed1;color:#fff;padding:8px 0;border-radius:6px;'
-                f'font-size:.82rem;font-weight:600;text-decoration:none;'
-                f'font-family:Inter,sans-serif;box-sizing:border-box;margin-bottom:6px;">'
-                f'🔐 Login with Zerodha</a>',
-                unsafe_allow_html=True
-            )
-            with st.expander("ℹ️ How to get access_token"):
-                st.caption(
-                    "1. Click **Login with Zerodha** above\n"
-                    "2. Log in with your Zerodha credentials + TOTP\n"
-                    "3. After login, browser redirects to a URL like:\n"
-                    "   `https://127.0.0.1/?access_token=XXXX&...`\n"
-                    "4. Copy the value after `access_token=` (before `&`)\n"
-                    "5. Paste it below"
-                )
-            _tok = st.text_input(
-                "access_token", value="", type="password",
-                placeholder="paste token here", key="kite_access_input",
-                label_visibility="collapsed"
-            )
-            if _tok.strip():
-                st.session_state.kite_access_token = _tok.strip()
-                # Try to fetch user profile to validate token
-                try:
-                    _k = KiteConnect(api_key=kite_api_key)
-                    _k.set_access_token(_tok.strip())
-                    _prof = _k.profile()
-                    st.session_state.kite_user = _prof.get("user_name", "")
-                except Exception:
-                    st.session_state.kite_user = ""
-                st.rerun()
-        else:
-            _uname = st.session_state.get("kite_user", "")
-            st.success(f"✅ {_uname if _uname else 'Connected'}")
-            st.caption("Valid until 6 AM IST. Login again tomorrow.")
-            if st.button("🔓 Logout", use_container_width=True, key="kite_logout"):
-                for _k in ["kite_access_token", "kite_user"]:
-                    st.session_state.pop(_k, None)
-                st.rerun()
-
     st.markdown("---")
 
     # ── Auto Refresh ──────────────────────────────────────────────────────────
@@ -1317,266 +1249,380 @@ with tab_twitter:
 
 
 # =============================================================================
-# TAB 8 — Portfolio (Zerodha Kite Connect)
-# Requires KITE_API_KEY in Streamlit Secrets (Publisher plan — no API secret needed).
-# Daily login flow: click "Login with Zerodha" in sidebar → paste request_token.
-# Access token expires every day at 6:00 AM IST (Zerodha policy, not changeable).
+# TAB 8 — Portfolio (Zerodha Holdings Upload)
+# Upload the holdings XLSX/CSV from Zerodha Console → Reports → Holdings.
+# The file is parsed automatically — no API key, no login needed.
+#
+# ZERODHA FILE FORMAT (auto-detected):
+#   Row 22 = headers: Symbol, ISIN, Sector, Quantity Available, ...
+#   Row 23+ = holdings data
+#   Rows 14-17 = summary: Invested Value, Present Value, Unrealized P&L
 # =============================================================================
 with tab_holdings:
-    st.markdown("#### 💼 Portfolio — Live Holdings")
+    st.markdown("#### 💼 Portfolio — Holdings")
 
-    # ── helper: get sector from yfinance (cached 24h) ─────────────────────────
-    @st.cache_data(ttl=86400)
-    def get_yf_info(ticker_ns):
-        """Fetch sector and company info for a NSE ticker via yfinance."""
+    # ── How to download the file ───────────────────────────────────────────────
+    with st.expander("ℹ️ How to get your holdings file from Zerodha"):
+        st.caption(
+            "1. Open **[console.zerodha.com](https://console.zerodha.com)** → log in\n"
+            "2. Go to **Portfolio → Holdings**\n"
+            "3. Click **Download** (top-right) → choose **XLSX** or **CSV**\n"
+            "4. Upload that file here — takes 2 seconds\n\n"
+            "**Tip:** Do this once a day after market close for accurate P&L."
+        )
+
+    # ── File uploader ─────────────────────────────────────────────────────────
+    uploaded_file = st.file_uploader(
+        "Upload your Zerodha holdings file",
+        type=["xlsx", "csv"],
+        key="holdings_upload",
+        label_visibility="collapsed",
+        help="Download from Zerodha Console → Portfolio → Holdings → Download"
+    )
+
+    # ── Parser ────────────────────────────────────────────────────────────────
+    def parse_zerodha_holdings(file_obj, filename):
+        """
+        Parse Zerodha holdings XLSX or CSV export.
+        Returns (df_holdings, summary_dict, error_str).
+        Summary keys: invested, present, pnl, pnl_pct
+        """
+        import re as _re
         try:
-            t = yf.Ticker(ticker_ns)
-            info = t.info
-            return {
-                "sector":   info.get("sector", "Unknown"),
-                "industry": info.get("industry", "Unknown"),
-                "name":     info.get("longName", ticker_ns),
+            if filename.endswith('.csv'):
+                raw = pd.read_csv(file_obj, header=None)
+            else:
+                raw = pd.read_excel(file_obj, header=None)
+
+            # ── Find summary values ────────────────────────────────────────────
+            summary = {"invested": 0, "present": 0, "pnl": 0, "pnl_pct": 0}
+            summary_map = {
+                "Invested Value":      "invested",
+                "Present Value":       "present",
+                "Unrealized P&L":      "pnl",
+                "Unrealized P&L Pct.": "pnl_pct",
             }
+            for _, row in raw.iterrows():
+                for col in row:
+                    if str(col).strip() in summary_map:
+                        key = summary_map[str(col).strip()]
+                        # value is in the next non-null cell
+                        vals = [v for v in row if str(v) not in ("nan","None","")]
+                        if len(vals) >= 2:
+                            try:
+                                summary[key] = float(str(vals[1]).replace(",",""))
+                            except Exception:
+                                pass
+
+            # ── Find header row (contains "Symbol" and "Sector") ───────────────
+            header_row = None
+            for i, row in raw.iterrows():
+                row_vals = [str(v).strip() for v in row]
+                if "Symbol" in row_vals and "Sector" in row_vals:
+                    header_row = i
+                    break
+
+            if header_row is None:
+                return None, summary, "Could not find header row with 'Symbol' and 'Sector'."
+
+            # ── Extract holdings data ──────────────────────────────────────────
+            df = pd.read_excel(file_obj, header=header_row) if filename.endswith('.xlsx')                  else pd.read_csv(file_obj, header=header_row)
+
+            # Keep only rows that have a Symbol value (non-null, non-header)
+            df = df[df["Symbol"].notna()].copy()
+            df = df[df["Symbol"].astype(str).str.strip() != ""]
+            df = df[~df["Symbol"].astype(str).str.lower().isin(["symbol","nan"])]
+            df = df.reset_index(drop=True)
+
+            # ── Rename columns to standard names ──────────────────────────────
+            col_map = {
+                "Symbol":                    "Symbol",
+                "ISIN":                      "ISIN",
+                "Sector":                    "Sector",
+                "Quantity Available":        "Qty",
+                "Average Price":             "Avg Price",
+                "Previous Closing Price":    "Prev Close",
+                "Unrealized P&L":            "Total P&L",
+                "Unrealized P&L Pct.":       "Return %",
+            }
+            df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
+
+            # ── Coerce numeric columns ─────────────────────────────────────────
+            for col in ["Qty", "Avg Price", "Prev Close", "Total P&L", "Return %"]:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(
+                        df[col].astype(str).str.replace(",",""), errors="coerce"
+                    )
+
+            # ── Derive computed columns ────────────────────────────────────────
+            df["Invested"]  = (df["Avg Price"] * df["Qty"]).round(2)
+            df["Cur Value"] = (df["Prev Close"] * df["Qty"]).round(2)
+            df["Day P&L"]   = 0.0   # not available in static export
+
+            # ── Filter zero-qty rows ───────────────────────────────────────────
+            df = df[df["Qty"] > 0].copy()
+
+            return df, summary, None
+
+        except Exception as e:
+            return None, {}, str(e)
+
+    # ── Fetch live LTP for a batch of symbols ─────────────────────────────────
+    @st.cache_data(ttl=60)
+    def fetch_live_ltp(symbols_tuple):
+        """Fetch live LTP for a tuple of NSE symbols via yfinance."""
+        tickers = [f"{s}.NS" for s in symbols_tuple]
+        live = {}
+        try:
+            data = yf.download(
+                tickers, period="2d", interval="1d",
+                progress=False, auto_adjust=True
+            )
+            close = data["Close"] if "Close" in data.columns else data.xs("Close", axis=1, level=0)
+            for s in symbols_tuple:
+                try:
+                    col = f"{s}.NS"
+                    series = close[col].dropna()
+                    if len(series) >= 2:
+                        live[s] = {
+                            "ltp":   round(float(series.iloc[-1]), 2),
+                            "prev":  round(float(series.iloc[-2]), 2),
+                        }
+                    elif len(series) == 1:
+                        live[s] = {"ltp": round(float(series.iloc[-1]), 2), "prev": None}
+                except Exception:
+                    pass
         except Exception:
-            return {"sector": "Unknown", "industry": "Unknown", "name": ticker_ns}
+            pass
+        return live
 
     @st.cache_data(ttl=300)
-    def fetch_stock_news(symbol_clean):
-        """Fetch recent news for a stock via yfinance RSS."""
-        url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={symbol_clean}.NS&region=IN&lang=en-IN"
+    def fetch_stock_news(symbol):
+        url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={symbol}.NS&region=IN&lang=en-IN"
         return fetch_rss(url)
 
-    # ── Kite data fetchers ────────────────────────────────────────────────────
-    @st.cache_data(ttl=60)
-    def fetch_kite_holdings(access_token, api_key):
-        """Fetch holdings from Kite API. Returns list of holding dicts."""
-        try:
-            kite = KiteConnect(api_key=api_key)
-            kite.set_access_token(access_token)
-            return kite.holdings(), None
-        except Exception as e:
-            return [], str(e)
-
-    # ── Gate: check login state ───────────────────────────────────────────────
-    kite_api_key_main = st.secrets.get("KITE_API_KEY", "") if hasattr(st, "secrets") else ""
-    access_token      = st.session_state.get("kite_access_token", "")
-    # Publisher plan: no API secret needed — access_token is obtained directly from login redirect
-
-    if not KITE_AVAILABLE:
-        st.warning(
-            "⚠️ The `kiteconnect` package is not installed. "
-            "Add `kiteconnect>=4.1.0` to your `requirements.txt` and redeploy."
-        )
-    elif not kite_api_key_main:
+    # ── Main rendering ────────────────────────────────────────────────────────
+    if uploaded_file is None:
         st.info(
-            "🔑 **Setup required:** Add your Kite API credentials to Streamlit Secrets.\n\n"
-            "**Steps:**\n"
-            "1. Go to [developers.kite.trade](https://developers.kite.trade) → Create App\n"
-            "2. Set Redirect URL to `https://127.0.0.1`\n"
-            "3. Copy your **API Key** and **API Secret**\n"
-            "4. Streamlit Cloud → your app → ⋮ → **Settings → Secrets** → add:\n"
-            "```toml\n"
-            "KITE_API_KEY = \"your_api_key\"\n"
-            "```\n"
-            "5. Click ↺ Refresh"
+            "📂 **Upload your Zerodha holdings file above** to see your portfolio.\n\n"
+            "Download it from: **Zerodha Console → Portfolio → Holdings → Download (XLSX)**"
         )
-    elif not access_token:
-        st.info(
-            "🔐 **Not connected.** Use the **Login with Zerodha** button in the sidebar to connect.\n\n"
-            "After logging in, your browser redirects to a URL like:\n"
-            "`https://127.0.0.1/?access_token=XXXXXXXX&request_token=YYYY&action=login&status=success`\n\n"
-            "Copy the **access_token** value (not request_token) and paste it into the sidebar input."
-        )
+        # Show sample of what the dashboard looks like
+        st.markdown("---")
+        st.markdown("**Once uploaded, you'll see:**")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Invested",      "₹2,84,203")
+        c2.metric("Current Value", "₹2,94,937", delta="+₹10,734 (+3.78%)")
+        c3.metric("Holdings",      "31 stocks")
     else:
-        # ── Fetch holdings ────────────────────────────────────────────────────
-        with st.spinner("Fetching holdings from Zerodha…"):
-            raw_holdings, err = fetch_kite_holdings(access_token, kite_api_key_main)
+        with st.spinner("Parsing holdings file…"):
+            df_h, summary, parse_err = parse_zerodha_holdings(
+                uploaded_file, uploaded_file.name
+            )
 
-        if err:
-            st.error(f"❌ Could not fetch holdings: {err}")
-            if "TokenException" in str(err) or "token" in str(err).lower():
-                st.warning("Access token may have expired. Please login again via the sidebar.")
-        elif not raw_holdings:
-            st.info("No holdings found in this account.")
+        if parse_err or df_h is None:
+            st.error(f"❌ Could not parse file: {parse_err}")
+            st.caption("Make sure you're uploading the Zerodha Holdings XLSX/CSV file.")
         else:
-            # ── Build DataFrame ───────────────────────────────────────────────
-            rows = []
-            for h in raw_holdings:
-                qty       = h.get("quantity", 0)
-                if qty == 0:
-                    continue    # skip zero-qty holdings
-                symbol    = h.get("tradingsymbol", "")
-                avg_price = h.get("average_price", 0)
-                ltp       = h.get("last_price", 0)
-                close     = h.get("close_price", ltp)   # previous close
-                invested  = avg_price * qty
-                cur_val   = ltp * qty
-                total_pnl = cur_val - invested
-                pct_ret   = (total_pnl / invested * 100) if invested else 0
-                day_pnl   = (ltp - close) * qty
+            # ── Fetch live prices ──────────────────────────────────────────────
+            all_symbols = tuple(df_h["Symbol"].tolist())
+            with st.spinner("Fetching live prices…"):
+                live_prices = fetch_live_ltp(all_symbols)
 
-                # yfinance sector lookup
-                yf_info = get_yf_info(f"{symbol}.NS")
+            # Update LTP and Day P&L where live data is available
+            def get_ltp(sym):
+                return live_prices.get(sym, {}).get("ltp", df_h.loc[df_h["Symbol"]==sym, "Prev Close"].iloc[0])
 
-                rows.append({
-                    "Symbol":     symbol,
-                    "Name":       yf_info["name"][:28],
-                    "Sector":     yf_info["sector"],
-                    "Qty":        qty,
-                    "Avg Price":  round(avg_price, 2),
-                    "LTP":        round(ltp, 2),
-                    "Invested":   round(invested, 2),
-                    "Cur Value":  round(cur_val, 2),
-                    "Day P&L":    round(day_pnl, 2),
-                    "Total P&L":  round(total_pnl, 2),
-                    "Return %":   round(pct_ret, 2),
-                })
+            df_h["LTP"] = df_h["Symbol"].apply(get_ltp)
+            df_h["LTP"] = pd.to_numeric(df_h["LTP"], errors="coerce")
 
-            df_h = pd.DataFrame(rows).sort_values("Cur Value", ascending=False)
+            # Recalculate with live LTP
+            df_h["Cur Value"]  = (df_h["LTP"] * df_h["Qty"]).round(2)
+            df_h["Total P&L"]  = (df_h["Cur Value"] - df_h["Invested"]).round(2)
+            df_h["Return %"]   = ((df_h["Total P&L"] / df_h["Invested"]) * 100).round(2)
+            df_h["Day P&L"]    = df_h.apply(
+                lambda r: round((r["LTP"] - live_prices.get(r["Symbol"], {}).get("prev", r["LTP"])) * r["Qty"], 2)
+                if live_prices.get(r["Symbol"], {}).get("prev") else 0.0, axis=1
+            )
 
-            # ── Portfolio Summary Metrics ──────────────────────────────────────
+            df_h = df_h.sort_values("Cur Value", ascending=False).reset_index(drop=True)
+
+            # ── Summary Metrics ────────────────────────────────────────────────
             total_invested = df_h["Invested"].sum()
             total_cur      = df_h["Cur Value"].sum()
             total_pnl      = df_h["Total P&L"].sum()
             total_day      = df_h["Day P&L"].sum()
             total_ret_pct  = (total_pnl / total_invested * 100) if total_invested else 0
 
-            pm1, pm2, pm3, pm4, pm5 = st.columns(5)
-            pm1.metric("Invested",      f"₹{total_invested:,.0f}")
-            pm2.metric("Current Value", f"₹{total_cur:,.0f}",
-                       delta=f"₹{total_pnl:+,.0f} ({total_ret_pct:+.2f}%)")
-            pm3.metric("Total P&L",     f"₹{total_pnl:+,.0f}",
-                       delta=f"{total_ret_pct:+.2f}%")
-            pm4.metric("Day P&L",       f"₹{total_day:+,.0f}")
-            pm5.metric("Holdings",      str(len(df_h)))
+            st.caption(f"📅 File: `{uploaded_file.name}` · {len(df_h)} holdings · Prices via yfinance (live)")
+
+            m1, m2, m3, m4, m5 = st.columns(5)
+            m1.metric("Invested",       f"₹{total_invested:,.0f}")
+            m2.metric("Current Value",  f"₹{total_cur:,.0f}",
+                      delta=f"₹{total_pnl:+,.0f}")
+            m3.metric("Total P&L",      f"₹{total_pnl:+,.0f}",
+                      delta=f"{total_ret_pct:+.2f}%")
+            m4.metric("Day P&L",        f"₹{total_day:+,.0f}")
+            m5.metric("Holdings",       str(len(df_h)))
 
             st.markdown("---")
 
             # ── Holdings Table ─────────────────────────────────────────────────
             st.markdown("##### Holdings")
 
-            def color_pnl_col(val):
+            def _col_color(val):
                 if isinstance(val, (int, float)):
-                    if val > 0:  return "color: #16a34a; font-weight: 600"
-                    if val < 0:  return "color: #dc2626; font-weight: 600"
+                    if val > 0: return "color:#16a34a;font-weight:600"
+                    if val < 0: return "color:#dc2626;font-weight:600"
                 return ""
 
-            styled_h = (
-                df_h[["Symbol","Name","Sector","Qty","Avg Price","LTP",
-                       "Invested","Cur Value","Day P&L","Total P&L","Return %"]]
-                .style
-                .applymap(color_pnl_col, subset=["Day P&L","Total P&L","Return %"])
+            display_cols = ["Symbol","Sector","Qty","Avg Price","LTP",
+                            "Invested","Cur Value","Day P&L","Total P&L","Return %"]
+            styled = (
+                df_h[display_cols].style
+                .applymap(_col_color, subset=["Day P&L","Total P&L","Return %"])
                 .format({
-                    "Avg Price": "₹{:,.2f}",
-                    "LTP":       "₹{:,.2f}",
-                    "Invested":  "₹{:,.0f}",
-                    "Cur Value": "₹{:,.0f}",
-                    "Day P&L":   "₹{:+,.2f}",
-                    "Total P&L": "₹{:+,.2f}",
-                    "Return %":  "{:+.2f}%",
+                    "Avg Price":  "₹{:,.2f}",
+                    "LTP":        "₹{:,.2f}",
+                    "Invested":   "₹{:,.0f}",
+                    "Cur Value":  "₹{:,.0f}",
+                    "Day P&L":    "₹{:+,.2f}",
+                    "Total P&L":  "₹{:+,.2f}",
+                    "Return %":   "{:+.2f}%",
                 })
             )
-            st.dataframe(styled_h, use_container_width=True,
-                         height=min(60 + len(df_h) * 36, 520), hide_index=True)
+            st.dataframe(styled, use_container_width=True,
+                         height=min(60 + len(df_h)*36, 560), hide_index=True)
 
             st.markdown("---")
 
-            # ── Sector Allocation Pie ──────────────────────────────────────────
+            # ── Sector Allocation ──────────────────────────────────────────────
             st.markdown("##### Sector Allocation")
 
             sector_df = (
-                df_h.groupby("Sector")["Cur Value"]
+                df_h.groupby("Sector", as_index=False)["Cur Value"]
                 .sum()
-                .reset_index()
                 .sort_values("Cur Value", ascending=False)
             )
+            sector_df["% of Portfolio"] = (sector_df["Cur Value"] / total_cur * 100).round(1)
 
             pie_colors = [
                 "#0057b8","#16a34a","#dc2626","#d97706","#7c3aed",
                 "#0891b2","#db2777","#65a30d","#ea580c","#6366f1",
                 "#0284c7","#059669","#9333ea","#b45309","#e11d48",
+                "#0f766e","#a16207","#7e22ce",
             ]
+
             fig_pie = go.Figure(go.Pie(
                 labels=sector_df["Sector"],
                 values=sector_df["Cur Value"],
-                hole=0.42,
-                marker=dict(colors=pie_colors[:len(sector_df)],
-                            line=dict(color="#ffffff", width=2)),
+                hole=0.44,
+                marker=dict(
+                    colors=pie_colors[:len(sector_df)],
+                    line=dict(color="#ffffff", width=2)
+                ),
                 textinfo="label+percent",
                 textfont=dict(size=11, family="Inter, sans-serif"),
                 hovertemplate="<b>%{label}</b><br>₹%{value:,.0f}<br>%{percent}<extra></extra>",
+                sort=True,
             ))
             fig_pie.add_annotation(
-                text=f"₹{total_cur:,.0f}<br><span style=\'font-size:10px;color:#64748b\'>Portfolio</span>",
-                x=0.5, y=0.5, showarrow=False,
-                font=dict(size=13, family="JetBrains Mono, monospace", color="#1e293b"),
-                align="center",
+                text=f"<b>₹{total_cur/1e5:.1f}L</b><br><span style=\'font-size:9px;color:#64748b\'>Portfolio</span>",
+                x=0.5, y=0.5, showarrow=False, align="center",
+                font=dict(size=12, family="JetBrains Mono, monospace", color="#1e293b"),
             )
             fig_pie.update_layout(
                 template=PLOTLY_TEMPLATE,
                 paper_bgcolor=PLOTLY_PAPER_BG,
                 plot_bgcolor=PLOTLY_PLOT_BG,
-                height=420,
+                height=400,
                 margin=dict(l=10, r=10, t=20, b=10),
                 legend=dict(
                     font=dict(size=10, family="Inter, sans-serif"),
-                    bgcolor="rgba(255,255,255,0.8)",
+                    bgcolor="rgba(255,255,255,0.9)",
                     bordercolor="#e2e8f0", borderwidth=1,
+                    orientation="v",
                 ),
                 showlegend=True,
             )
-            pc1, pc2 = st.columns([1, 1])
+
+            pc1, pc2 = st.columns([3, 2])
             with pc1:
                 st.plotly_chart(fig_pie, use_container_width=True)
             with pc2:
                 st.markdown("<br>", unsafe_allow_html=True)
-                st.markdown("**Sector Breakdown**")
-                sector_df["% of Portfolio"] = (
-                    sector_df["Cur Value"] / total_cur * 100
-                ).round(2)
-                sector_df["Cur Value"] = sector_df["Cur Value"].apply(
-                    lambda x: f"₹{x:,.0f}"
-                )
-                sector_df["% of Portfolio"] = sector_df["% of Portfolio"].apply(
-                    lambda x: f"{x:.1f}%"
-                )
-                st.dataframe(sector_df, use_container_width=True,
-                             height=380, hide_index=True)
+                sector_display = sector_df.copy()
+                sector_display["Cur Value"] = sector_display["Cur Value"].apply(lambda x: f"₹{x:,.0f}")
+                sector_display["% of Portfolio"] = sector_display["% of Portfolio"].apply(lambda x: f"{x:.1f}%")
+                st.dataframe(sector_display[["Sector","Cur Value","% of Portfolio"]],
+                             use_container_width=True, height=380, hide_index=True)
 
             st.markdown("---")
 
-            # ── Company News ──────────────────────────────────────────────────
-            st.markdown("##### Company News")
-            st.caption("Latest news for each of your holdings via Yahoo Finance RSS.")
+            # ── Top Gainers & Losers ───────────────────────────────────────────
+            st.markdown("##### Top Gainers & Losers")
+            gl1, gl2 = st.columns(2)
+            top_gain = df_h.nlargest(5, "Return %")[["Symbol","Sector","Return %","Total P&L"]]
+            top_loss = df_h.nsmallest(5, "Return %")[["Symbol","Sector","Return %","Total P&L"]]
 
-            # Show top 8 holdings by current value for news
-            top_symbols = df_h.head(8)["Symbol"].tolist()
-            news_cols   = st.columns(2)
-            for i, sym in enumerate(top_symbols):
+            with gl1:
+                st.markdown("🟢 **Top Gainers**")
+                st.dataframe(
+                    top_gain.style
+                    .applymap(_col_color, subset=["Return %","Total P&L"])
+                    .format({"Return %": "{:+.2f}%", "Total P&L": "₹{:+,.0f}"}),
+                    use_container_width=True, hide_index=True, height=220
+                )
+            with gl2:
+                st.markdown("🔴 **Top Losers**")
+                st.dataframe(
+                    top_loss.style
+                    .applymap(_col_color, subset=["Return %","Total P&L"])
+                    .format({"Return %": "{:+.2f}%", "Total P&L": "₹{:+,.0f}"}),
+                    use_container_width=True, hide_index=True, height=220
+                )
+
+            st.markdown("---")
+
+            # ── Company News ───────────────────────────────────────────────────
+            st.markdown("##### Company News")
+            st.caption("Latest news for your top 8 holdings by value.")
+
+            top8 = df_h.head(8)["Symbol"].tolist()
+            news_cols = st.columns(2)
+            for i, sym in enumerate(top8):
                 with news_cols[i % 2]:
                     st.markdown(
-                        f'<div style="font-size:.82rem;font-weight:700;color:#1e293b;font-family:Inter,sans-serif;margin:8px 0 4px 0;">📰 {sym}</div>',
+                        f'<div style="font-size:.82rem;font-weight:700;color:#1e293b;'
+                        f'font-family:Inter,sans-serif;margin:10px 0 4px 0;">'
+                        f'📰 {sym}</div>',
                         unsafe_allow_html=True
                     )
-                    news_items = fetch_stock_news(sym)
-                    if not news_items:
+                    items = fetch_stock_news(sym)
+                    if not items:
                         st.caption("No news found.")
                     else:
-                        for item in news_items[:3]:
+                        for item in items[:3]:
                             st.markdown(
-                                f'<div class="news-card" style="margin-bottom:6px;"><div class="news-headline"><a href="{item['link']}" target="_blank" style="color:#0057b8;text-decoration:none;font-size:.82rem;">{item['title']}</a></div><div class="news-meta">🕐 {item['published']}</div></div>',
+                                f'<div class="news-card" style="margin-bottom:6px;">'
+                                f'<div class="news-headline">'
+                                f'<a href="{item["link"]}" target="_blank" '
+                                f'style="color:#0057b8;text-decoration:none;font-size:.82rem;">'
+                                f'{item["title"]}</a></div>'
+                                f'<div class="news-meta">🕐 {item["published"]}</div>'
+                                f'</div>',
                                 unsafe_allow_html=True
                             )
 
-        st.markdown("---")
-        st.markdown(
-            '<div style="font-size:.72rem;color:#94a3b8;font-family:JetBrains Mono,monospace;">'
-            "💼 Holdings via Zerodha Kite Connect Publisher API · LTP refreshes every 60 sec · "
-            "Sector data via yfinance · News via Yahoo Finance RSS · "
-            "Token expires 6 AM IST daily."
-            '</div>',
-            unsafe_allow_html=True
-        )
+    st.markdown("---")
+    st.markdown(
+        '<div style="font-size:.72rem;color:#94a3b8;font-family:JetBrains Mono,monospace;">'
+        "💼 Upload Zerodha Holdings XLSX from Console → Portfolio → Holdings → Download · "
+        "Live LTP via yfinance · Sectors from Zerodha file · Refreshes on re-upload."
+        "</div>",
+        unsafe_allow_html=True
+    )
+
 
 # =============================================================================
 # FOOTER
