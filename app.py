@@ -590,7 +590,7 @@ st.markdown("---")
 # =============================================================================
 # SECTION TABS
 # =============================================================================
-tab_tv, tab_technicals, tab_breadth, tab_news, tab_calendar, tab_twitter, tab_holdings = st.tabs([
+tab_tv, tab_technicals, tab_breadth, tab_news, tab_calendar, tab_twitter, tab_holdings, tab_research = st.tabs([
     "📈 Chart",
     "🔬 Technicals",
     "🌡️ Breadth",
@@ -598,6 +598,7 @@ tab_tv, tab_technicals, tab_breadth, tab_news, tab_calendar, tab_twitter, tab_ho
     "📅 Calendar",
     "📬 Channels",
     "💼 Portfolio",
+    "🔍 Research",
 ])
 
 # =============================================================================
@@ -1959,14 +1960,17 @@ with tab_holdings:
                     if s:
                         news_by_sym[s].append(item)
 
-                syms_ordered = df_h["Symbol"].tolist()
-                PANEL_H = 400
+                # Only render panels for companies that have at least one article
+                syms_with_news = [s for s in df_h["Symbol"].tolist() if news_by_sym.get(s)]
+                syms_no_news   = [s for s in df_h["Symbol"].tolist() if not news_by_sym.get(s)]
+                PANEL_H = 560
 
-                total_items = sum(len(news_by_sym.get(s,[])) for s in syms_ordered)
-                st.caption(f"{total_items} articles across {len(syms_ordered)} holdings \u00b7 Latest first per company")
+                total_items = sum(len(news_by_sym.get(s,[])) for s in syms_with_news)
+                note_no_news = (f" · No news found for: {', '.join(syms_no_news)}" if syms_no_news else "")
+                st.caption(f"{total_items} articles across {len(syms_with_news)} holdings · Latest first per company{note_no_news}")
 
-                for row_i in range(0, len(syms_ordered), 2):
-                    pair = syms_ordered[row_i:row_i+2]
+                for row_i in range(0, len(syms_with_news), 2):
+                    pair = syms_with_news[row_i:row_i+2]
                     cols = st.columns(len(pair))
                     if not isinstance(cols, list):
                         cols = [cols]
@@ -1980,36 +1984,29 @@ with tab_holdings:
                             except Exception:
                                 pass
 
-                            if not items:
-                                cards = (
-                                    '<div style="padding:24px 16px;text-align:center;'
-                                    'color:#94a3b8;font-family:Inter,sans-serif;font-size:.8rem;">'
-                                    'No news found for this stock.</div>'
+                            cards = ""
+                            for item in items:
+                                src_type  = item.get("source_type","News")
+                                badge_clr = SOURCE_COLORS.get(src_type, "#64748b")
+                                cards += (
+                                    f'<div style="background:#fff;border:1px solid #e2e8f0;'
+                                    f'border-radius:7px;padding:9px 12px;margin-bottom:6px;'
+                                    f'box-shadow:0 1px 2px rgba(0,0,0,.03);">'
+                                    f'<div style="margin-bottom:3px;">'
+                                    f'<span style="background:{badge_clr}20;color:{badge_clr};'
+                                    f'font-size:.6rem;font-weight:700;padding:1px 5px;'
+                                    f'border-radius:3px;font-family:JetBrains Mono,monospace;">'
+                                    f'{src_type}</span></div>'
+                                    f'<div style="font-size:.82rem;font-weight:600;'
+                                    f'line-height:1.35;color:#1e293b;">'
+                                    f'<a href="{item["link"]}" target="_blank" '
+                                    f'style="color:#0057b8;text-decoration:none;">'
+                                    f'{item["title"]}</a></div>'
+                                    f'<div style="font-size:.65rem;color:#94a3b8;margin-top:3px;'
+                                    f'font-family:JetBrains Mono,monospace;">'
+                                    f'\U0001f550 {item["published"]}</div>'
+                                    f'</div>'
                                 )
-                            else:
-                                cards = ""
-                                for item in items:
-                                    src_type  = item.get("source_type","News")
-                                    badge_clr = SOURCE_COLORS.get(src_type, "#64748b")
-                                    cards += (
-                                        f'<div style="background:#fff;border:1px solid #e2e8f0;'
-                                        f'border-radius:7px;padding:9px 12px;margin-bottom:6px;'
-                                        f'box-shadow:0 1px 2px rgba(0,0,0,.03);">'
-                                        f'<div style="margin-bottom:3px;">'
-                                        f'<span style="background:{badge_clr}20;color:{badge_clr};'
-                                        f'font-size:.6rem;font-weight:700;padding:1px 5px;'
-                                        f'border-radius:3px;font-family:JetBrains Mono,monospace;">'
-                                        f'{src_type}</span></div>'
-                                        f'<div style="font-size:.82rem;font-weight:600;'
-                                        f'line-height:1.35;color:#1e293b;">'
-                                        f'<a href="{item["link"]}" target="_blank" '
-                                        f'style="color:#0057b8;text-decoration:none;">'
-                                        f'{item["title"]}</a></div>'
-                                        f'<div style="font-size:.65rem;color:#94a3b8;margin-top:3px;'
-                                        f'font-family:JetBrains Mono,monospace;">'
-                                        f'\U0001f550 {item["published"]}</div>'
-                                        f'</div>'
-                                    )
 
                             panel_html = (
                                 f'<!DOCTYPE html><html><head><meta charset="utf-8">'
@@ -2051,6 +2048,248 @@ with tab_holdings:
         unsafe_allow_html=True
     )
 
+
+
+# =============================================================================
+# TAB 9 — Equity Research (AI-Powered Institutional Analysis)
+# Uses Claude claude-sonnet-4-20250514 via the Anthropic API.
+# The full 15-section institutional research prompt is sent with the company name.
+# Output streams section by section. Multi-part reports use "Continue" button.
+# =============================================================================
+with tab_research:
+    st.markdown("#### 🔍 Equity Research — AI Institutional Analysis")
+    st.caption(
+        "Enter any company name or ticker. The AI generates a full 15-section institutional "
+        "equity research report: thesis, Porter's Five Forces, financial model, DCF, scenario analysis, "
+        "risk framework, and more. Methodology: Goldman/JPMorgan calibre. Powered by Claude."
+    )
+
+    # ── Prompt constants ──────────────────────────────────────────────────────
+    RESEARCH_SYSTEM_PROMPT = """You are a senior equity research analyst with 20+ years of institutional experience across bulge-bracket and elite boutique firms — equivalent in calibre to lead analysts at Goldman Sachs, JPMorgan, Morgan Stanley, UBS, Barclays, HSBC, Bank of America, Citi, and Jefferies. You have deep expertise across all sectors, market caps, and geographies, covering both listed equities and private companies.
+
+Your output will be consumed exclusively by senior buy-side and sell-side professionals, portfolio managers, and capital allocators. Do not simplify, do not hedge unnecessarily, do not add disclaimers beyond those standard in institutional research. Use the full vocabulary of the profession: EV/EBITDA, FCF yield, ROIC, WACC, NTM multiples, comps, DCF, sum-of-the-parts, operating leverage, convexity, downside protection, and all other technical terminology as required. The reader is sophisticated. Speak to them accordingly.
+
+REPORT STRUCTURE — MANDATORY SEQUENCE
+
+BEFORE YOU WRITE A SINGLE WORD OF THE REPORT, output a REPORT ROADMAP first — a numbered list of all 15 sections with a one-line company-specific statement of what you will cover in each section.
+
+DATA INTEGRITY RULES (non-negotiable):
+- NEVER fabricate financial figures, metrics, dates, names, or transactions.
+- NEVER extrapolate silently — state methodology and limitations.
+- NEVER conflate actuals with estimates — label each clearly.
+- Mark unavailable data as: [DATA UNAVAILABLE — external source required: suggest checking (source)]
+- Flag stale data (>12 months for fast-moving companies): [DATA MAY BE STALE — verify against latest filings]
+
+Produce the report in this mandatory sequence:
+1. COVER PAGE DATA — ticker, exchange, sector, rating (BUY/HOLD/SELL), price target, current price, upside/downside, investment horizon (short/medium/long), key risks
+2. EXECUTIVE SUMMARY (max 400 words) — thesis in 3-5 bullets, Howard Marks second-level thinking, Mauboussin expectations investing lens (reverse-engineer price-implied assumptions), cycle positioning, conviction level
+3. COMPANY OVERVIEW — business model, revenue streams, geographic exposure, customer concentration, ownership structure
+4. INDUSTRY & COMPETITIVE LANDSCAPE — full Porter's Five Forces, moat analysis, peer/comp set selection with rationale
+5. MACRO & GEOPOLITICAL CONTEXT — rates, inflation, FX, commodities, geopolitical risk, sovereign risk
+6. INDUSTRY TAILWINDS, HEADWINDS & POLICY — structural demand drivers, cyclical headwinds, government policy, regulatory risk, ESG capital flows
+7. GOVERNMENT CONNECTIONS & POLITICAL ECONOMY — SOE dynamics, regulatory capture, subsidies, political affiliations of key principals, geopolitical exposure
+8. MANAGEMENT QUALITY & CAPITAL ALLOCATION — track record, capital allocation scorecard, incentive alignment, earnings quality, Mauboussin ROIC/CAP framework
+9. FINANCIAL ANALYSIS & MODEL — income statement, balance sheet, cash flow, returns summary across LTM/current/NTM/+2Y
+10. VALUATION — Mauboussin expectations anchor (reverse DCF), DCF (base/bear/bull), trading comps (EV/EBITDA, P/E, P/FCF), precedent transactions, SOTP where applicable, football field summary
+11. SCENARIO ANALYSIS — Bull/Base/Bear with probabilities summing to 100%, Marks asymmetry ratio (bull upside ÷ bear downside must be stated), probability-weighted PT
+12. CATALYST TIMELINE — time-bound catalysts with magnitude, probability, and direction
+13. KEY RISKS — ranked by severity × probability, with materiality, crystallisation probability, mitigants, and PT impact
+14. SHORT THESIS / BEAR STEELMAN — strongest possible bear case as a short-seller would construct it
+15. KNOWLEDGE GAPS & DATA LIMITATIONS — unavailable data, information asymmetry, model limitations, primary research required
+
+ANALYTICAL STANDARDS:
+→ Apply Howard Marks second-level thinking: what does consensus believe, what do you believe, why does the gap exist, why will it close?
+→ Apply Mauboussin expectations investing: reverse-engineer price-implied growth, margin, and ROIC. State whether price-implied expectations are too optimistic, too pessimistic, or fair.
+→ Apply Marks asymmetry framework: assess upside/downside ratio. BUY at high conviction requires ratio > 2.0x.
+→ ROIC vs WACC analysis and competitive advantage period are mandatory.
+→ Use base rates to pressure-test management guidance and consensus forecasts.
+→ When you reach your output limit, stop at the end of the current section and output exactly:
+  ── REPORT PAUSED ──
+  Completed through: [Section number and title]
+  Remaining sections: [list]
+  To continue: reply with "Continue"
+→ When the user sends "Continue", resume from the next section without re-introducing the company."""
+
+    # ── Session state ─────────────────────────────────────────────────────────
+    if "research_messages" not in st.session_state:
+        st.session_state.research_messages = []   # list of {role, content}
+    if "research_company" not in st.session_state:
+        st.session_state.research_company  = ""
+    if "research_running" not in st.session_state:
+        st.session_state.research_running  = False
+
+    # ── Input row ─────────────────────────────────────────────────────────────
+    ri1, ri2, ri3 = st.columns([3, 1, 1])
+    with ri1:
+        company_input = st.text_input(
+            "Company name or ticker",
+            placeholder="e.g. HDFCBANK, Reliance Industries, JSW Steel, Adani Ports, AAPL",
+            key="research_company_input",
+            label_visibility="collapsed",
+        )
+    with ri2:
+        run_btn = st.button("🔍 Generate Report", use_container_width=True, key="run_research")
+    with ri3:
+        clear_btn = st.button("🗑️ Clear", use_container_width=True, key="clear_research")
+
+    if clear_btn:
+        st.session_state.research_messages = []
+        st.session_state.research_company  = ""
+        st.rerun()
+
+    # ── Trigger new report ────────────────────────────────────────────────────
+    if run_btn and company_input.strip():
+        company = company_input.strip()
+        st.session_state.research_company  = company
+        st.session_state.research_messages = [
+            {"role": "user", "content": f"Analyse {company}"}
+        ]
+        st.rerun()
+
+    # ── Continue button (shown when report is paused) ─────────────────────────
+    last_content = ""
+    if st.session_state.research_messages:
+        last_msg = st.session_state.research_messages[-1]
+        if last_msg["role"] == "assistant":
+            last_content = last_msg["content"]
+
+    is_paused = "REPORT PAUSED" in last_content
+
+    if is_paused:
+        if st.button("▶️ Continue Report", use_container_width=False, key="continue_research"):
+            st.session_state.research_messages.append(
+                {"role": "user", "content": "Continue"}
+            )
+            st.rerun()
+
+    # ── Display existing conversation ─────────────────────────────────────────
+    if st.session_state.research_messages:
+        company_label = st.session_state.research_company
+        if company_label:
+            st.markdown(
+                f'<div style="font-size:.78rem;font-weight:700;color:#0057b8;'
+                f'font-family:JetBrains Mono,monospace;margin-bottom:8px;">'
+                f'Research: {company_label}</div>',
+                unsafe_allow_html=True
+            )
+
+        for msg in st.session_state.research_messages:
+            if msg["role"] == "user" and msg["content"] not in ("Continue",):
+                st.markdown(
+                    f'<div style="background:#e0f2fe;border-radius:8px;padding:8px 14px;'
+                    f'margin:6px 0;font-size:.82rem;color:#0057b8;font-family:Inter,sans-serif;">'
+                    f'🔍 Analysing: <strong>{msg["content"].replace("Analyse ","")}</strong></div>',
+                    unsafe_allow_html=True
+                )
+            elif msg["role"] == "assistant":
+                # Render the report in a styled scrollable container
+                import html as _html
+                safe_content = msg["content"]
+
+                # Style section headers (lines starting with digit+dot or === lines)
+                import re as _re
+                lines = safe_content.split('\n')
+                styled_lines = []
+                for line in lines:
+                    # Section headers like "1. COVER PAGE" or "══════"
+                    if _re.match(r'^─+$', line) or _re.match(r'^═+$', line):
+                        styled_lines.append(f'<hr style="border:none;border-top:1px solid #e2e8f0;margin:12px 0;">')
+                    elif _re.match(r'^\d+\.\s+[A-Z]', line):
+                        styled_lines.append(
+                            f'<div style="font-size:.95rem;font-weight:700;color:#0057b8;'
+                            f'font-family:JetBrains Mono,monospace;margin:18px 0 6px 0;'
+                            f'border-bottom:2px solid #e2e8f0;padding-bottom:4px;">{line}</div>'
+                        )
+                    elif line.startswith('──') or line.startswith('══'):
+                        styled_lines.append(
+                            f'<div style="font-size:.75rem;font-weight:700;color:#64748b;'
+                            f'font-family:JetBrains Mono,monospace;margin:10px 0 4px 0;'
+                            f'letter-spacing:.06em;">{line}</div>'
+                        )
+                    elif line.startswith('REPORT PAUSED') or '── REPORT PAUSED ──' in line:
+                        styled_lines.append(
+                            f'<div style="background:#fef3c7;border:1px solid #f59e0b;'
+                            f'border-radius:6px;padding:10px 14px;margin:12px 0;'
+                            f'font-size:.82rem;font-family:JetBrains Mono,monospace;color:#92400e;">'
+                            f'⏸ {line}</div>'
+                        )
+                    elif line.startswith('- ') or line.startswith('→ '):
+                        styled_lines.append(
+                            f'<div style="padding:2px 0 2px 16px;font-size:.83rem;color:#334155;'
+                            f'line-height:1.6;">{line}</div>'
+                        )
+                    elif line.strip() == '':
+                        styled_lines.append('<br>')
+                    else:
+                        styled_lines.append(
+                            f'<div style="font-size:.83rem;color:#1e293b;line-height:1.65;'
+                            f'padding:1px 0;">{line}</div>'
+                        )
+
+                report_html = '\n'.join(styled_lines)
+
+                st.components.v1.html(
+                    f'''<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+  *{{box-sizing:border-box;margin:0;padding:0;}}
+  html,body{{background:#ffffff;font-family:Inter,sans-serif;}}
+  .report{{padding:20px 24px 24px 24px;}}
+  a{{color:#0057b8;}}
+</style></head><body>
+<div class="report">{report_html}</div>
+</body></html>''',
+                    height=900,
+                    scrolling=True,
+                )
+
+    # ── Run the API call if last message is from user ─────────────────────────
+    msgs = st.session_state.research_messages
+    if msgs and msgs[-1]["role"] == "user":
+        with st.spinner("Generating institutional research report… this takes 30–60 seconds."):
+            try:
+                resp = requests.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={"Content-Type": "application/json"},
+                    json={
+                        "model":      "claude-sonnet-4-20250514",
+                        "max_tokens": 8000,
+                        "system":     RESEARCH_SYSTEM_PROMPT,
+                        "messages":   msgs,
+                    },
+                    timeout=120,
+                )
+                data = resp.json()
+                if "content" in data and data["content"]:
+                    text = data["content"][0].get("text","")
+                    st.session_state.research_messages.append(
+                        {"role": "assistant", "content": text}
+                    )
+                elif "error" in data:
+                    st.error(f"API error: {data['error'].get('message','Unknown error')}")
+                    st.caption("Make sure the Anthropic API is accessible from Streamlit Cloud.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Request failed: {e}")
+
+    if not st.session_state.research_messages:
+        st.markdown(
+            '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;'
+            'padding:24px 28px;margin-top:12px;">'
+            '<div style="font-size:.9rem;font-weight:700;color:#1e293b;margin-bottom:10px;">'
+            '📋 What this generates</div>'
+            '<div style="font-size:.82rem;color:#475569;line-height:1.7;">'
+            '• <b>15-section institutional report</b> — Cover Page, Executive Summary, '
+            'Company Overview, Porter\'s Five Forces, Macro Context, Industry Tailwinds/Headwinds, '
+            'Government Connections, Management Quality, Financial Model, DCF Valuation, '
+            'Scenario Analysis, Catalyst Timeline, Risk Framework, Bear Steelman, Knowledge Gaps<br>'
+            '• <b>Howard Marks framework</b> — second-level thinking, asymmetry of outcomes, cycle positioning<br>'
+            '• <b>Mauboussin framework</b> — reverse DCF, price-implied expectations, ROIC/CAP analysis<br>'
+            '• <b>Multi-part reports</b> — click "Continue Report" when the report pauses at output limit<br>'
+            '• Works for any listed or private company globally<br>'
+            '</div>'
+            '</div>',
+            unsafe_allow_html=True
+        )
 
 
 # =============================================================================
