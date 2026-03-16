@@ -1,10 +1,12 @@
-# Investment Dashboard — Requirements
-# Tested with Python 3.10 / 3.11 on Streamlit Community Cloud
+# Investment Dashboard — Dependencies
+# Streamlit Community Cloud · Python 3.11+
+# Using >= pins so the cloud resolver can pick compatible versions freely.
+# Do NOT use == pins — they cause solver conflicts on the free tier.
 
-streamlit==1.35.0
-yfinance==0.2.40
-pandas==2.2.2
-numpy==1.26.4
-plotly==5.22.0
-feedparser==6.0.11
-streamlit-autorefresh==1.0.1
+streamlit>=1.32.0
+yfinance>=0.2.36
+pandas>=2.0.0
+numpy>=1.24.0,<2.0.0
+plotly>=5.18.0
+feedparser>=6.0.8
+streamlit-autorefresh>=0.0.1
