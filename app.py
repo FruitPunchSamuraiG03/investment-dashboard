@@ -2257,48 +2257,79 @@ ANALYTICAL STANDARDS:
                     scrolling=True,
                 )
 
-    # ── Run the API call if last message is from user ─────────────────────────
+    # ── Run the API call (Google Gemini — free tier) ─────────────────────────
+    # Get free API key at: https://aistudio.google.com
+    # Add to Streamlit Cloud → Settings → Secrets:  GEMINI_API_KEY = "AIza..."
     msgs = st.session_state.research_messages
     if msgs and msgs[-1]["role"] == "user":
         with st.spinner("Generating institutional research report… this takes 30–60 seconds."):
             try:
-                # Read Anthropic API key from Streamlit Secrets
-                # Add to Streamlit Cloud → Settings → Secrets:
-                #   ANTHROPIC_API_KEY = "sk-ant-..."
-                _anthropic_key = st.secrets.get("ANTHROPIC_API_KEY", "") if hasattr(st, "secrets") else ""
-                if not _anthropic_key:
+                _gemini_key = st.secrets.get("GEMINI_API_KEY", "") if hasattr(st, "secrets") else ""
+                if not _gemini_key:
                     st.error(
-                        "⚠️ **ANTHROPIC_API_KEY not found in Streamlit Secrets.**\n\n"
-                        "Go to Streamlit Cloud → your app → ⋮ → **Settings → Secrets** and add:\n"
-                        "```toml\nANTHROPIC_API_KEY = \"sk-ant-...\"\n```\n"
-                        "Get your key at: [console.anthropic.com](https://console.anthropic.com)"
+                        "⚠️ **GEMINI_API_KEY not found in Streamlit Secrets.**\n\n"
+                        "**Free setup (no credit card needed):**\n"
+                        "1. Go to [aistudio.google.com](https://aistudio.google.com) → Sign in with Google\n"
+                        "2. Click **Get API key** → **Create API key** → Copy it\n"
+                        "3. Streamlit Cloud → your app → ⋮ → **Settings → Secrets** → add:\n"
+                        "```toml\nGEMINI_API_KEY = \"AIza...\"\n```\n"
+                        "4. Save → Reboot app"
                     )
                     st.stop()
 
+                # Convert conversation history to Gemini format
+                # Gemini uses "parts" instead of "content", and "model" instead of "assistant"
+                gemini_contents = []
+                for m in msgs:
+                    role = "model" if m["role"] == "assistant" else "user"
+                    gemini_contents.append({
+                        "role":  role,
+                        "parts": [{"text": m["content"]}]
+                    })
+
+                # Gemini 1.5 Pro — free tier: 15 RPM, 1M TPD
+                _gemini_url = (
+                    f"https://generativelanguage.googleapis.com/v1beta/models/"
+                    f"gemini-1.5-pro:generateContent?key={_gemini_key}"
+                )
                 resp = requests.post(
-                    "https://api.anthropic.com/v1/messages",
-                    headers={
-                        "Content-Type":      "application/json",
-                        "x-api-key":         _anthropic_key,
-                        "anthropic-version": "2023-06-01",
-                    },
+                    _gemini_url,
+                    headers={"Content-Type": "application/json"},
                     json={
-                        "model":      "claude-sonnet-4-20250514",
-                        "max_tokens": 8000,
-                        "system":     RESEARCH_SYSTEM_PROMPT,
-                        "messages":   msgs,
+                        "system_instruction": {
+                            "parts": [{"text": RESEARCH_SYSTEM_PROMPT}]
+                        },
+                        "contents":           gemini_contents,
+                        "generationConfig": {
+                            "maxOutputTokens": 8192,
+                            "temperature":     0.3,
+                        },
                     },
-                    timeout=120,
+                    timeout=180,
                 )
                 data = resp.json()
-                if "content" in data and data["content"]:
-                    text = data["content"][0].get("text","")
-                    st.session_state.research_messages.append(
-                        {"role": "assistant", "content": text}
+
+                # Extract text from Gemini response structure
+                if "candidates" in data and data["candidates"]:
+                    text = (
+                        data["candidates"][0]
+                        .get("content", {})
+                        .get("parts", [{}])[0]
+                        .get("text", "")
                     )
+                    if text:
+                        st.session_state.research_messages.append(
+                            {"role": "assistant", "content": text}
+                        )
+                    else:
+                        st.error("Empty response from Gemini. Try again.")
                 elif "error" in data:
-                    st.error(f"API error: {data['error'].get('message','Unknown error')}")
-                    st.caption("Make sure the Anthropic API is accessible from Streamlit Cloud.")
+                    err = data["error"]
+                    st.error(f"Gemini API error: {err.get('message', str(err))}")
+                    if "API_KEY_INVALID" in str(err) or "401" in str(err.get("code","")):
+                        st.caption("The GEMINI_API_KEY in Streamlit Secrets appears to be invalid. Regenerate it at aistudio.google.com.")
+                else:
+                    st.error(f"Unexpected Gemini response: {str(data)[:300]}")
                 st.rerun()
             except Exception as e:
                 st.error(f"Request failed: {e}")
