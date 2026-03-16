@@ -1009,7 +1009,7 @@ with tab_twitter:
     # ── Account list — edit here to add/remove accounts ──────────────────────
     # Format: ("Display Name", "@handle", "short description")
     TWITTER_ACCOUNTS = [
-        ("Redsox Global India", "RedsoxGlobalIndia", "Market insights & trading calls"),
+        ("RedboxGlobal India", "Market insights & trading calls"),
         # Add more accounts below this line, e.g.:
         # ("CNBC TV18",        "CNBCTV18News",      "Indian business news"),
         # ("Zerodha",          "zerodhaonline",      "Brokerage & market education"),
