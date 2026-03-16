@@ -518,6 +518,68 @@ with st.sidebar:
     st.markdown('<div class="dash-subtitle">Markets · Data · Intelligence</div>', unsafe_allow_html=True)
     st.markdown("---")
 
+    # ── Zerodha Portfolio Login (TOP of sidebar) ──────────────────────────────
+    st.markdown('<div class="section-header">📊 Zerodha Portfolio</div>', unsafe_allow_html=True)
+
+    # Load API key from Streamlit Secrets
+    kite_api_key = st.secrets.get("KITE_API_KEY", "") if hasattr(st, "secrets") else ""
+
+    if not kite_api_key:
+        st.caption("⚠️ Add KITE_API_KEY to Streamlit Secrets to enable.")
+    elif not KITE_AVAILABLE:
+        st.caption("⚠️ kiteconnect not installed. Check requirements.txt.")
+    else:
+        # Build login URL manually — avoids kiteconnect library version
+        # incompatibilities that cause "Invalid api_key" errors.
+        # Publisher plan redirects directly to access_token in the URL.
+        _login_url = f"https://kite.zerodha.com/connect/login?v=3&api_key={kite_api_key}"
+
+        if "kite_access_token" not in st.session_state:
+            st.markdown(
+                f'<a href="{_login_url}" target="_blank" '
+                f'style="display:inline-block;width:100%;text-align:center;'
+                f'background:#387ed1;color:#fff;padding:8px 0;border-radius:6px;'
+                f'font-size:.82rem;font-weight:600;text-decoration:none;'
+                f'font-family:Inter,sans-serif;box-sizing:border-box;margin-bottom:6px;">'
+                f'🔐 Login with Zerodha</a>',
+                unsafe_allow_html=True
+            )
+            with st.expander("ℹ️ How to get access_token"):
+                st.caption(
+                    "1. Click **Login with Zerodha** above\n"
+                    "2. Log in with your Zerodha credentials + TOTP\n"
+                    "3. After login, browser redirects to a URL like:\n"
+                    "   `https://127.0.0.1/?access_token=XXXX&...`\n"
+                    "4. Copy the value after `access_token=` (before `&`)\n"
+                    "5. Paste it below"
+                )
+            _tok = st.text_input(
+                "access_token", value="", type="password",
+                placeholder="paste token here", key="kite_access_input",
+                label_visibility="collapsed"
+            )
+            if _tok.strip():
+                st.session_state.kite_access_token = _tok.strip()
+                # Try to fetch user profile to validate token
+                try:
+                    _k = KiteConnect(api_key=kite_api_key)
+                    _k.set_access_token(_tok.strip())
+                    _prof = _k.profile()
+                    st.session_state.kite_user = _prof.get("user_name", "")
+                except Exception:
+                    st.session_state.kite_user = ""
+                st.rerun()
+        else:
+            _uname = st.session_state.get("kite_user", "")
+            st.success(f"✅ {_uname if _uname else 'Connected'}")
+            st.caption("Valid until 6 AM IST. Login again tomorrow.")
+            if st.button("🔓 Logout", use_container_width=True, key="kite_logout"):
+                for _k in ["kite_access_token", "kite_user"]:
+                    st.session_state.pop(_k, None)
+                st.rerun()
+
+    st.markdown("---")
+
     # ── Auto Refresh ──────────────────────────────────────────────────────────
     st.markdown('<div class="section-header">⟳ Auto Refresh</div>', unsafe_allow_html=True)
     refresh_map = {"Off": 0, "1 min": 60_000, "5 min": 300_000, "15 min": 900_000}
@@ -580,71 +642,6 @@ with st.sidebar:
     user_rss_1 = st.text_input("Custom Feed #1 URL", value="", placeholder="https://...")
     user_rss_2 = st.text_input("Custom Feed #2 URL", value="", placeholder="https://...")
     user_rss_3 = st.text_input("Custom Feed #3 URL", value="", placeholder="https://...")
-
-    # ── Zerodha Kite Login ────────────────────────────────────────────────────
-    st.markdown("---")
-    st.markdown('<div class="section-header">📊 Zerodha Portfolio</div>', unsafe_allow_html=True)
-
-    # Read API key from Streamlit secrets (set in Streamlit Cloud → Settings → Secrets)
-    kite_api_key = st.secrets.get("KITE_API_KEY", "") if hasattr(st, "secrets") else ""
-
-    if not kite_api_key:
-        st.caption("⚠️ Add KITE_API_KEY to Streamlit Secrets to enable portfolio.")
-        st.caption("Go to Streamlit Cloud → your app → ⋮ → Settings → Secrets")
-    elif not KITE_AVAILABLE:
-        st.caption("⚠️ kiteconnect package not installed. Check requirements.txt.")
-    else:
-        # Debug: show masked key so you can confirm it's loading correctly
-        _masked = kite_api_key[:4] + "****" + kite_api_key[-3:] if len(kite_api_key) > 7 else "****"
-        st.caption(f"Key loaded: `{_masked}`")
-        # Step 1: generate login URL
-        _kite_tmp = KiteConnect(api_key=kite_api_key)
-        _login_url = _kite_tmp.login_url()
-
-        if "kite_access_token" not in st.session_state:
-            # Publisher plan: access_token is returned directly in the redirect URL.
-            # Publisher plan: access_token returned directly in redirect URL. No secret needed.
-            # Redirect URL after login looks like:
-            #   https://127.0.0.1/?access_token=XXXX&request_token=YYYY&action=login&status=success
-            # User copies just the access_token value and pastes it below.
-            st.markdown(
-                f'<a href="{_login_url}" target="_blank" '
-                f'style="display:inline-block;width:100%;text-align:center;'
-                f'background:#387ed1;color:#fff;padding:7px 0;border-radius:6px;'
-                f'font-size:.78rem;font-weight:600;text-decoration:none;'
-                f'font-family:Inter,sans-serif;box-sizing:border-box;">'
-                f'🔐 Login with Zerodha</a>',
-                unsafe_allow_html=True
-            )
-            st.caption(
-                "After login, your browser goes to a URL like:\n"
-                "`https://127.0.0.1/?access_token=XXXX&...`\n"
-                "Copy the **access_token** value and paste it below."
-            )
-            _access_token_input = st.text_input(
-                "Paste access_token here", value="",
-                placeholder="xxxxxxxxxxxxxx", key="kite_access_input",
-                type="password"
-            )
-            if _access_token_input.strip():
-                st.session_state.kite_access_token = _access_token_input.strip()
-                # Fetch user name from Zerodha profile endpoint
-                try:
-                    _kite_tmp.set_access_token(_access_token_input.strip())
-                    _profile = _kite_tmp.profile()
-                    st.session_state.kite_user = _profile.get("user_name", "")
-                except Exception:
-                    st.session_state.kite_user = ""
-                st.rerun()
-        else:
-            _uname = st.session_state.get("kite_user", "")
-            st.success(f"✅ Connected{' · ' + _uname if _uname else ''}")
-            st.caption("Token valid until 6 AM IST tomorrow.")
-            if st.button("🔓 Logout", use_container_width=True, key="kite_logout"):
-                del st.session_state["kite_access_token"]
-                if "kite_user" in st.session_state:
-                    del st.session_state["kite_user"]
-                st.rerun()
 
     st.markdown("---")
     st.markdown('<div class="section-header">🕐 Last Updated</div>', unsafe_allow_html=True)
