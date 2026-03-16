@@ -2290,7 +2290,7 @@ ANALYTICAL STANDARDS:
                 # Gemini 1.5 Pro — free tier: 15 RPM, 1M TPD
                 _gemini_url = (
                     f"https://generativelanguage.googleapis.com/v1beta/models/"
-                    f"gemini-1.5-pro:generateContent?key={_gemini_key}"
+                    f"gemini-2.0-flash:generateContent?key={_gemini_key}"
                 )
                 resp = requests.post(
                     _gemini_url,
