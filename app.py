@@ -184,8 +184,8 @@ st.markdown("""
     .news-meta { font-size: 0.7rem; color: #94a3b8; margin-top: 3px; font-family: 'JetBrains Mono', monospace; }
 
     /* ── Tabs ── */
-    .stTabs [data-baseweb="tab-list"] { background: #f4f6f9; gap: 4px; border-radius: 8px; padding: 4px; }
-    .stTabs [data-baseweb="tab"] { background: transparent; border: none; border-radius: 6px; color: #64748b; font-size: 0.82rem; font-family: 'Inter', sans-serif; }
+    .stTabs [data-baseweb="tab-list"] { background: #f4f6f9; gap: 6px; border-radius: 8px; padding: 5px 6px; }
+    .stTabs [data-baseweb="tab"] { background: transparent; border: none; border-radius: 6px; color: #64748b; font-size: 0.82rem; font-family: 'Inter', sans-serif; padding: 6px 18px !important; }
     .stTabs [aria-selected="true"] { background: #ffffff !important; color: #0057b8 !important; font-weight: 600; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
 
     /* ── Buttons ── */
@@ -368,23 +368,28 @@ def fetch_nifty50_breadth():
 
 @st.cache_data(ttl=600)
 def fetch_rss(url):
-    """Fetch and parse an RSS feed."""
+    """Fetch and parse an RSS feed. Returns items sorted newest-first."""
     try:
         feed = feedparser.parse(url)
         items = []
-        for entry in feed.entries[:15]:
+        for entry in feed.entries[:25]:
             pub = entry.get("published", entry.get("updated", ""))
+            pub_dt = None
             try:
                 from email.utils import parsedate_to_datetime
-                pub_str = parsedate_to_datetime(pub).strftime("%d %b %Y  %H:%M")
+                pub_dt = parsedate_to_datetime(pub)
+                pub_str = pub_dt.strftime("%d %b %Y  %H:%M")
             except Exception:
                 pub_str = pub[:20] if pub else "–"
             items.append({
-                "title": entry.get("title", "No title"),
-                "link": entry.get("link", "#"),
+                "title":    entry.get("title", "No title"),
+                "link":     entry.get("link", "#"),
                 "published": pub_str,
-                "source": feed.feed.get("title", url),
+                "pub_dt":   pub_dt,          # sortable datetime object
+                "source":   feed.feed.get("title", url),
             })
+        # Sort newest-first within each feed
+        items.sort(key=lambda x: x["pub_dt"] or datetime.min, reverse=True)
         return items
     except Exception:
         return []
@@ -602,8 +607,8 @@ with tab_charts:
     tv_col1, tv_col2 = st.columns([2, 1])
     with tv_col1:
         tv_symbol = st.text_input(
-            "Symbol (TradingView format)", value="NSE:HDFCBANK",
-            help="Examples: NSE:NIFTY, NSE:RELIANCE, NASDAQ:AAPL, NYSE:TSLA",
+            "Symbol (TradingView format)", value="HDFCBANK",
+            help="For NSE stocks use just the ticker e.g. HDFCBANK, RELIANCE. Global: AAPL, MSFT.",
             key="tv_sym"
         )
     with tv_col2:
@@ -866,7 +871,7 @@ with tab_breadth:
 # TAB 4 — News Command Center
 # =============================================================================
 with tab_news:
-    st.markdown("#### Geopolitical & Market News Command Center")
+    st.markdown("#### 📡 Market Pulse — Latest News")
 
     GLOBAL_FEEDS = {
         "Reuters World News":   "https://feeds.reuters.com/Reuters/worldNews",
@@ -900,7 +905,7 @@ with tab_news:
                 for item in fetch_rss(url):
                     item["source"] = src_name
                     all_global.append(item)
-        all_global.sort(key=lambda x: x.get("published", ""), reverse=True)
+        all_global.sort(key=lambda x: x.get("pub_dt") or datetime.min, reverse=True)
         render_news_items(all_global[:40])
 
     with news_tab2:
@@ -919,7 +924,7 @@ with tab_news:
                     for item in fetch_rss(url):
                         item["source"] = label
                         all_user.append(item)
-            all_user.sort(key=lambda x: x.get("published", ""), reverse=True)
+            all_user.sort(key=lambda x: x.get("pub_dt") or datetime.min, reverse=True)
             if all_user:
                 render_news_items(all_user[:30])
             else:
@@ -997,8 +1002,8 @@ with tab_tv:
     st.caption("Full-featured chart with drawing tools, indicators, and real-time data.")
 
     tv2_sym = st.text_input(
-        "Symbol", value="NSE:NIFTY", key="tv2_sym",
-        help="Examples: NSE:NIFTY, BSE:SENSEX, NASDAQ:AAPL, COMEX:GC1!, NYMEX:CL1!"
+        "Symbol", value="HDFCBANK", key="tv2_sym",
+        help="For NSE stocks use just the ticker e.g. HDFCBANK, RELIANCE. Global: AAPL, MSFT."
     )
     import urllib.parse as _ul
     tv2_params = _ul.urlencode({
@@ -1050,7 +1055,6 @@ with tab_twitter:
     # ADD / REMOVE TELEGRAM CHANNELS HERE
     # Format: ("Display Name", "telegram_username", "description")
     TELEGRAM_CHANNELS = [
-        ("RedboxGlobal India",               "indiaredboxglobal", "Real-time market news & calls"),
         ("Beat The Street News",             "Beatthestreetnews", "Latest share market news"),
         ("Beat The Street Equity Research",  "btsreports",        "Research reports & books"),
         # ── Add more channels below this line ─────────────────────
@@ -1127,68 +1131,66 @@ with tab_twitter:
     if not TELEGRAM_CHANNELS:
         st.info("No channels configured. Add entries to `TELEGRAM_CHANNELS` in `app.py`.")
     else:
-        ch_labels = [name for name, _, _ in TELEGRAM_CHANNELS]
-        ch_tabs   = st.tabs(ch_labels)
+        # Render all channels stacked — no sub-tabs, everything visible at once
+        for (display_name, handle, desc) in TELEGRAM_CHANNELS:
+            col_h1, col_h2 = st.columns([5, 1])
+            with col_h1:
+                st.markdown(
+                    f'<div style="font-size:.95rem;font-weight:700;color:#1e293b;'
+                    f'font-family:Inter,sans-serif;margin-bottom:1px;">'
+                    f'{display_name} <span style="font-weight:400;color:#94a3b8;font-size:.8rem;">@{handle}</span>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+                st.caption(desc)
+            with col_h2:
+                st.markdown(
+                    f'<a href="https://t.me/{handle}" target="_blank" '
+                    f'style="display:inline-block;background:#0057b8;color:#fff;'
+                    f'padding:5px 14px;border-radius:6px;font-size:.75rem;'
+                    f'font-weight:600;text-decoration:none;font-family:Inter,sans-serif;">'
+                    f'Open ↗</a>',
+                    unsafe_allow_html=True
+                )
 
-        for ch_tab, (display_name, handle, desc) in zip(ch_tabs, TELEGRAM_CHANNELS):
-            with ch_tab:
-                # Header row
-                col_h1, col_h2 = st.columns([5, 1])
-                with col_h1:
-                    st.markdown(f"**{display_name}** &nbsp;·&nbsp; `@{handle}`")
-                    st.caption(desc)
-                with col_h2:
+            with st.spinner(f"Fetching posts from @{handle}…"):
+                posts, mirror_used, err = fetch_telegram_channel(handle)
+
+            if err:
+                st.warning(f"⚠️ Mirrors unavailable for **@{handle}**. Retrying every 60 sec.")
+                st.markdown(
+                    f'<a href="https://t.me/{handle}" target="_blank" '
+                    f'style="display:inline-block;background:#f1f5f9;color:#0057b8;border:1px solid #e2e8f0;'
+                    f'padding:6px 14px;border-radius:6px;font-size:.78rem;font-weight:600;'
+                    f'text-decoration:none;font-family:Inter,sans-serif;margin-bottom:8px;">'
+                    f'📬 Open @{handle} on Telegram ↗</a>',
+                    unsafe_allow_html=True
+                )
+            elif not posts:
+                st.info(f"No posts found for @{handle}. Channel may be private.")
+            else:
+                mirror_short = mirror_used.replace("https://", "").split("/")[0]
+                st.caption(f"{len(posts)} posts · {mirror_short} · Latest first")
+                for post in posts:
+                    body_html = (
+                        f'<div style="font-size:.8rem;color:#475569;margin-top:4px;line-height:1.5;">'
+                        f'{post["body"]}</div>'
+                    ) if post["body"] else ""
                     st.markdown(
-                        f'<a href="https://t.me/{handle}" target="_blank" '
-                        f'style="display:inline-block;background:#0057b8;color:#fff;'
-                        f'padding:5px 14px;border-radius:6px;font-size:.75rem;'
-                        f'font-weight:600;text-decoration:none;font-family:Inter,sans-serif;">'
-                        f'Open ↗</a>',
+                        f'<div class="news-card">'
+                        f'<div class="news-headline">'
+                        f'<a href="{post["link"]}" target="_blank" style="color:#0057b8;text-decoration:none;">'
+                        f'{post["title"]}</a></div>'
+                        f'{body_html}'
+                        f'<div class="news-meta">📬 @{handle} &nbsp;·&nbsp; 🕐 {post["published"]}</div>'
+                        f'</div>',
                         unsafe_allow_html=True
                     )
-                st.markdown("---")
 
-                with st.spinner(f"Fetching posts from @{handle}…"):
-                    posts, mirror_used, err = fetch_telegram_channel(handle)
-
-                if err:
-                    st.warning(
-                        f"⚠️ Could not load posts for **@{handle}** right now.\n\n"
-                        f"All RSS mirrors are temporarily unavailable (common during market hours). "
-                        f"The dashboard retries automatically every 60 seconds.\n\n"
-                        f"Last error: `{err}`"
-                    )
-                    st.markdown(
-                        f'<a href="https://t.me/{handle}" target="_blank" '
-                        f'style="display:inline-block;background:#f1f5f9;color:#0057b8;border:1px solid #e2e8f0;'
-                        f'padding:7px 16px;border-radius:6px;font-size:.82rem;font-weight:600;'
-                        f'text-decoration:none;font-family:Inter,sans-serif;">'
-                        f'📬 Open @{handle} directly on Telegram ↗</a>',
-                        unsafe_allow_html=True
-                    )
-                elif not posts:
-                    st.info(f"No posts found for @{handle}. The channel may be private.")
-                else:
-                    mirror_short = mirror_used.replace("https://", "").split("/")[0]
-                    st.caption(
-                        f"{len(posts)} recent posts · via {mirror_short} · "
-                        f"Refreshes every 60 sec · Latest first"
-                    )
-                    for post in posts:
-                        body_html = (
-                            f'<div style="font-size:.8rem;color:#475569;margin-top:4px;line-height:1.5;">'
-                            f'{post["body"]}</div>'
-                        ) if post["body"] else ""
-                        st.markdown(
-                            f'<div class="news-card">'
-                            f'<div class="news-headline">'
-                            f'<a href="{post["link"]}" target="_blank" style="color:#0057b8;text-decoration:none;">'
-                            f'{post["title"]}</a></div>'
-                            f'{body_html}'
-                            f'<div class="news-meta">📬 @{handle} &nbsp;·&nbsp; 🕐 {post["published"]}</div>'
-                            f'</div>',
-                            unsafe_allow_html=True
-                        )
+            st.markdown(
+                '<hr style="border:none;border-top:2px solid #e2e8f0;margin:20px 0;">',
+                unsafe_allow_html=True
+            )
 
     st.markdown("---")
     st.markdown(
