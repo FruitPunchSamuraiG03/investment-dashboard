@@ -589,65 +589,14 @@ st.markdown("---")
 # =============================================================================
 # SECTION TABS
 # =============================================================================
-tab_charts, tab_technicals, tab_breadth, tab_news, tab_calendar, tab_tv, tab_twitter = st.tabs([
-    "📈 Live Chart",
+tab_tv, tab_technicals, tab_breadth, tab_news, tab_calendar, tab_twitter = st.tabs([
+    "📈 Chart",
     "🔬 Technicals",
     "🌡️ Breadth",
     "📰 News",
     "📅 Calendar",
-    "📺 TradingView",
     "📬 Channels",
 ])
-
-# =============================================================================
-# TAB 1 — TradingView Live Chart
-# =============================================================================
-with tab_charts:
-    st.markdown("#### TradingView Live Chart")
-    tv_col1, tv_col2 = st.columns([2, 1])
-    with tv_col1:
-        tv_symbol = st.text_input(
-            "Symbol (TradingView format)", value="HDFCBANK",
-            help="For NSE stocks use just the ticker e.g. HDFCBANK, RELIANCE. Global: AAPL, MSFT.",
-            key="tv_sym"
-        )
-    with tv_col2:
-        tv_interval = st.selectbox("Interval", ["D", "W", "60", "30", "15", "5", "1"], index=0, key="tv_int")
-
-    import urllib.parse as _up1
-    # frameElementId is required by TradingView widgetembed to render the chart
-    # Without it, the embed shows only the symbol label with no chart
-    _tv1_params = _up1.urlencode({
-        "frameElementId": "tv_chart_tab1",
-        "symbol":         tv_symbol,
-        "interval":       tv_interval,
-        "timezone":       "Asia/Kolkata",
-        "theme":          "light",
-        "style":          "1",
-        "locale":         "en",
-        "toolbar_bg":     "f8f9fb",
-        "hide_side_toolbar": "0",
-        "allow_symbol_change": "1",
-        "withdateranges": "1",
-        "save_image":     "1",
-        "hideideas":      "1",
-    })
-    tv_html = f'''<!DOCTYPE html>
-<html><head><meta charset="utf-8">
-<style>html,body{{margin:0;padding:0;background:#fff;}}
-iframe{{border:none;border-radius:8px;display:block;}}
-</style></head>
-<body>
-<iframe id="tv_chart_tab1"
-  src="https://s.tradingview.com/widgetembed/?{_tv1_params}"
-  width="100%" height="590"
-  frameborder="0" scrolling="no"
-  allowtransparency="true"
-  allowfullscreen>
-</iframe>
-</body></html>'''
-    st.components.v1.html(tv_html, height=600)
-
 
 # =============================================================================
 # TAB 2 — Technical Intelligence Engine
@@ -995,11 +944,11 @@ with tab_calendar:
 
 
 # =============================================================================
-# TAB 6 — TradingView Advanced
+# TAB 1 (was 6) — Chart
 # =============================================================================
 with tab_tv:
-    st.markdown("#### Advanced TradingView Widget")
-    st.caption("Full-featured chart with drawing tools, indicators, and real-time data.")
+    st.markdown("#### 📈 Chart")
+    st.caption("Full-featured TradingView chart. Enter any ticker — NSE stocks: HDFCBANK, RELIANCE. Global: AAPL, MSFT.")
 
     tv2_sym = st.text_input(
         "Symbol", value="HDFCBANK", key="tv2_sym",
@@ -1128,69 +1077,164 @@ with tab_twitter:
 
         return [], None, last_error   # all mirrors failed
 
+    def build_channel_html(posts, err, handle, display_name, desc, mirror_used):
+        """Build a self-contained scrollable HTML block for one Telegram channel."""
+        if err:
+            body = f"""
+            <div style="padding:20px 16px;background:#fffbeb;border:1px solid #fde68a;
+                        border-radius:8px;font-family:Inter,sans-serif;font-size:.82rem;color:#92400e;">
+              ⚠️ Mirrors temporarily unavailable. Retrying every 60 sec.
+            </div>
+            <div style="margin-top:12px;">
+              <a href="https://t.me/{handle}" target="_blank"
+                 style="display:inline-block;background:#f1f5f9;color:#0057b8;
+                        border:1px solid #e2e8f0;padding:7px 16px;border-radius:6px;
+                        font-size:.78rem;font-weight:600;text-decoration:none;
+                        font-family:Inter,sans-serif;">
+                📬 Open @{handle} on Telegram ↗
+              </a>
+            </div>"""
+        elif not posts:
+            body = f"""
+            <div style="padding:20px 16px;background:#f0f9ff;border:1px solid #bae6fd;
+                        border-radius:8px;font-family:Inter,sans-serif;font-size:.82rem;color:#0c4a6e;">
+              No posts found. Channel may be private or mirrors haven't indexed it yet.
+            </div>"""
+        else:
+            mirror_short = mirror_used.replace("https://", "").split("/")[0]
+            cards = ""
+            for post in posts:
+                body_part = (
+                    f'<div style="font-size:.78rem;color:#475569;margin-top:5px;'
+                    f'line-height:1.55;word-break:break-word;">{post["body"]}</div>'
+                ) if post["body"] else ""
+                cards += f"""
+                <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;
+                            padding:11px 14px;margin-bottom:8px;
+                            box-shadow:0 1px 3px rgba(0,0,0,.04);">
+                  <div style="font-size:.84rem;font-weight:600;line-height:1.4;">
+                    <a href="{post['link']}" target="_blank"
+                       style="color:#0057b8;text-decoration:none;">{post['title']}</a>
+                  </div>
+                  {body_part}
+                  <div style="font-size:.68rem;color:#94a3b8;margin-top:6px;
+                              font-family:'JetBrains Mono',monospace;">
+                    🕐 {post['published']}
+                  </div>
+                </div>"""
+            body = f'''
+            <div style="font-size:.68rem;color:#94a3b8;font-family:'JetBrains Mono',monospace;
+                        margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #e8ecf0;">
+              {len(posts)} posts · {mirror_short} · latest first
+            </div>
+            {cards}'''
+
+        return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+  * {{ box-sizing:border-box; margin:0; padding:0; }}
+  html, body {{
+    background: #f4f6f9;
+    font-family: Inter, sans-serif;
+    height: 100%;
+  }}
+  .channel-wrap {{
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: #f4f6f9;
+  }}
+  .channel-header {{
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: #ffffff;
+    border-bottom: 2px solid #e2e8f0;
+    padding: 10px 14px 8px 14px;
+    flex-shrink: 0;
+  }}
+  .ch-title {{
+    font-size: .9rem;
+    font-weight: 700;
+    color: #1e293b;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }}
+  .ch-handle {{
+    font-weight: 400;
+    color: #94a3b8;
+    font-size: .75rem;
+    font-family: 'JetBrains Mono', monospace;
+  }}
+  .ch-open {{
+    display: inline-block;
+    background: #0057b8;
+    color: #fff !important;
+    padding: 3px 11px;
+    border-radius: 5px;
+    font-size: .72rem;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }}
+  .ch-desc {{
+    font-size: .7rem;
+    color: #64748b;
+    margin-top: 2px;
+  }}
+  .channel-body {{
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 12px 16px 12px;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e0 transparent;
+  }}
+  .channel-body::-webkit-scrollbar {{ width: 5px; }}
+  .channel-body::-webkit-scrollbar-thumb {{
+    background: #cbd5e0;
+    border-radius: 4px;
+  }}
+</style>
+</head><body>
+<div class="channel-wrap">
+  <div class="channel-header">
+    <div class="ch-title">
+      <span>{display_name} <span class="ch-handle">@{handle}</span></span>
+      <a href="https://t.me/{handle}" target="_blank" class="ch-open">Open ↗</a>
+    </div>
+    <div class="ch-desc">{desc}</div>
+  </div>
+  <div class="channel-body">
+    {body}
+  </div>
+</div>
+</body></html>"""
+
     if not TELEGRAM_CHANNELS:
         st.info("No channels configured. Add entries to `TELEGRAM_CHANNELS` in `app.py`.")
     else:
-        # Render all channels stacked — no sub-tabs, everything visible at once
+        # Fetch all channels first (parallel-ish — each call is cached)
+        channel_data = []
         for (display_name, handle, desc) in TELEGRAM_CHANNELS:
-            col_h1, col_h2 = st.columns([5, 1])
-            with col_h1:
-                st.markdown(
-                    f'<div style="font-size:.95rem;font-weight:700;color:#1e293b;'
-                    f'font-family:Inter,sans-serif;margin-bottom:1px;">'
-                    f'{display_name} <span style="font-weight:400;color:#94a3b8;font-size:.8rem;">@{handle}</span>'
-                    f'</div>',
-                    unsafe_allow_html=True
-                )
-                st.caption(desc)
-            with col_h2:
-                st.markdown(
-                    f'<a href="https://t.me/{handle}" target="_blank" '
-                    f'style="display:inline-block;background:#0057b8;color:#fff;'
-                    f'padding:5px 14px;border-radius:6px;font-size:.75rem;'
-                    f'font-weight:600;text-decoration:none;font-family:Inter,sans-serif;">'
-                    f'Open ↗</a>',
-                    unsafe_allow_html=True
-                )
-
-            with st.spinner(f"Fetching posts from @{handle}…"):
+            with st.spinner(f"Fetching @{handle}…"):
                 posts, mirror_used, err = fetch_telegram_channel(handle)
+            channel_data.append((display_name, handle, desc, posts, err, mirror_used))
 
-            if err:
-                st.warning(f"⚠️ Mirrors unavailable for **@{handle}**. Retrying every 60 sec.")
-                st.markdown(
-                    f'<a href="https://t.me/{handle}" target="_blank" '
-                    f'style="display:inline-block;background:#f1f5f9;color:#0057b8;border:1px solid #e2e8f0;'
-                    f'padding:6px 14px;border-radius:6px;font-size:.78rem;font-weight:600;'
-                    f'text-decoration:none;font-family:Inter,sans-serif;margin-bottom:8px;">'
-                    f'📬 Open @{handle} on Telegram ↗</a>',
-                    unsafe_allow_html=True
+        # Render as equal-width columns, each independently scrollable
+        cols = st.columns(len(channel_data))
+        if not isinstance(cols, list):
+            cols = [cols]
+
+        SCROLL_HEIGHT = 820  # px — tall enough to show ~8 posts, scrollable beyond
+
+        for col, (display_name, handle, desc, posts, err, mirror_used) in zip(cols, channel_data):
+            with col:
+                html_block = build_channel_html(
+                    posts, err, handle, display_name, desc, mirror_used
                 )
-            elif not posts:
-                st.info(f"No posts found for @{handle}. Channel may be private.")
-            else:
-                mirror_short = mirror_used.replace("https://", "").split("/")[0]
-                st.caption(f"{len(posts)} posts · {mirror_short} · Latest first")
-                for post in posts:
-                    body_html = (
-                        f'<div style="font-size:.8rem;color:#475569;margin-top:4px;line-height:1.5;">'
-                        f'{post["body"]}</div>'
-                    ) if post["body"] else ""
-                    st.markdown(
-                        f'<div class="news-card">'
-                        f'<div class="news-headline">'
-                        f'<a href="{post["link"]}" target="_blank" style="color:#0057b8;text-decoration:none;">'
-                        f'{post["title"]}</a></div>'
-                        f'{body_html}'
-                        f'<div class="news-meta">📬 @{handle} &nbsp;·&nbsp; 🕐 {post["published"]}</div>'
-                        f'</div>',
-                        unsafe_allow_html=True
-                    )
-
-            st.markdown(
-                '<hr style="border:none;border-top:2px solid #e2e8f0;margin:20px 0;">',
-                unsafe_allow_html=True
-            )
+                st.components.v1.html(html_block, height=SCROLL_HEIGHT, scrolling=False)
 
     st.markdown("---")
     st.markdown(
