@@ -63,8 +63,9 @@ st.markdown("""
     [data-testid="stHeader"] { background-color: #ffffff; border-bottom: 1px solid #e2e8f0; }
 
     /* ── Push main content below the sticky ticker bar ── */
+    /* FIXED: Increased padding-top to 125px to clear the 104px ticker bar + add breathing room */
     [data-testid="stAppViewContainer"] > .main > .block-container {
-        padding-top: 70px !important;
+        padding-top: 125px !important;
     }
 
     /* ── Sticky ticker bar ── */
@@ -199,10 +200,6 @@ st.markdown("""
     }
     .stTabs [data-baseweb="tab"] { background: transparent; border: none; border-radius: 6px; color: #64748b; font-size: 0.82rem; font-family: 'Inter', sans-serif; padding: 6px 18px !important; }
     .stTabs [aria-selected="true"] { background: #f0f5ff !important; color: #0057b8 !important; font-weight: 600; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
-    /* Extra top padding to prevent content hiding under sticky ticker + tabs */
-    [data-testid="stAppViewContainer"] > .main > .block-container {
-        padding-top: 90px !important;
-    }
 
     /* ── Buttons ── */
     .stButton button { background: #ffffff; border: 1px solid #e2e8f0; color: #475569; font-size: 0.78rem; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
@@ -921,40 +918,36 @@ with tab_calendar:
         "**update it** by editing `events` under `# ── CALENDAR DATA ──` in `app.py`."
     )
 
-    # ── CALENDAR DATA ── (Update this list manually when dates change)
-    # Source: federalreserve.gov (FOMC), rbi.org.in (RBI MPC), ecb.europa.eu (ECB)
-    # All times in IST. ✅ = already announced/passed. Upcoming = still relevant.
     events = [
         # ── Already occurred in 2026 ──────────────────────────────────────────
         {"Date": "28 Jan 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision (held at 3.50–3.75%)", "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "✅ Done"},
-        {"Date": "06 Feb 2026", "Time": "10:00 IST", "Event": "RBI MPC Decision (held at 5.25%)",            "Country": "🇮🇳 India", "Impact": "High",   "Status": "✅ Done"},
-        {"Date": "12 Feb 2026", "Time": "19:00 IST", "Event": "US CPI Inflation (Jan 2026)",                 "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "✅ Done"},
-        {"Date": "06 Mar 2026", "Time": "18:30 IST", "Event": "US Non-Farm Payrolls (Feb 2026)",             "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "✅ Done"},
-        {"Date": "12 Mar 2026", "Time": "19:00 IST", "Event": "US CPI Inflation (Feb 2026)",                 "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "✅ Done"},
+        {"Date": "06 Feb 2026", "Time": "10:00 IST", "Event": "RBI MPC Decision (held at 5.25%)",             "Country": "🇮🇳 India", "Impact": "High",   "Status": "✅ Done"},
+        {"Date": "12 Feb 2026", "Time": "19:00 IST", "Event": "US CPI Inflation (Jan 2026)",                  "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "✅ Done"},
+        {"Date": "06 Mar 2026", "Time": "18:30 IST", "Event": "US Non-Farm Payrolls (Feb 2026)",              "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "✅ Done"},
+        {"Date": "12 Mar 2026", "Time": "19:00 IST", "Event": "US CPI Inflation (Feb 2026)",                  "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "✅ Done"},
         # ── Upcoming ──────────────────────────────────────────────────────────
         {"Date": "19 Mar 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision + SEP Projections",   "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
-        {"Date": "20 Mar 2026", "Time": "18:30 IST", "Event": "US PCE Price Index (Feb 2026)",               "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
-        {"Date": "27 Mar 2026", "Time": "18:30 IST", "Event": "US GDP Q4 2025 (Final)",                     "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
-        {"Date": "03 Apr 2026", "Time": "18:30 IST", "Event": "US Non-Farm Payrolls (Mar 2026)",             "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
-        {"Date": "08 Apr 2026", "Time": "10:00 IST", "Event": "RBI MPC Decision",                          "Country": "🇮🇳 India", "Impact": "High",   "Status": "🔜 Upcoming"},
-        {"Date": "10 Apr 2026", "Time": "19:00 IST", "Event": "US CPI Inflation (Mar 2026)",                 "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
-        {"Date": "17 Apr 2026", "Time": "19:15 IST", "Event": "ECB Rate Decision",                          "Country": "🇪🇺 EU",    "Impact": "High",   "Status": "🔜 Upcoming"},
-        {"Date": "30 Apr 2026", "Time": "20:00 IST", "Event": "US GDP Q1 2026 (Advance Estimate)",         "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
-        {"Date": "07 May 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision",                      "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
-        {"Date": "08 May 2026", "Time": "18:30 IST", "Event": "US Non-Farm Payrolls (Apr 2026)",             "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
-        {"Date": "13 May 2026", "Time": "19:00 IST", "Event": "US CPI Inflation (Apr 2026)",                 "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
-        {"Date": "05 Jun 2026", "Time": "19:15 IST", "Event": "ECB Rate Decision",                          "Country": "🇪🇺 EU",    "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "20 Mar 2026", "Time": "18:30 IST", "Event": "US PCE Price Index (Feb 2026)",                "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "27 Mar 2026", "Time": "18:30 IST", "Event": "US GDP Q4 2025 (Final)",                       "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "03 Apr 2026", "Time": "18:30 IST", "Event": "US Non-Farm Payrolls (Mar 2026)",              "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "08 Apr 2026", "Time": "10:00 IST", "Event": "RBI MPC Decision",                           "Country": "🇮🇳 India", "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "10 Apr 2026", "Time": "19:00 IST", "Event": "US CPI Inflation (Mar 2026)",                  "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "17 Apr 2026", "Time": "19:15 IST", "Event": "ECB Rate Decision",                           "Country": "🇪🇺 EU",    "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "30 Apr 2026", "Time": "20:00 IST", "Event": "US GDP Q1 2026 (Advance Estimate)",          "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "07 May 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision",                       "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "08 May 2026", "Time": "18:30 IST", "Event": "US Non-Farm Payrolls (Apr 2026)",              "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "13 May 2026", "Time": "19:00 IST", "Event": "US CPI Inflation (Apr 2026)",                  "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "05 Jun 2026", "Time": "19:15 IST", "Event": "ECB Rate Decision",                           "Country": "🇪🇺 EU",    "Impact": "High",   "Status": "🔜 Upcoming"},
         {"Date": "Jun 2026",    "Time": "10:00 IST", "Event": "RBI MPC Decision (date TBC)",               "Country": "🇮🇳 India", "Impact": "High",   "Status": "🔜 Upcoming"},
         {"Date": "18 Jun 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision + SEP Projections",   "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
-        {"Date": "30 Jul 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision",                      "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "30 Jul 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision",                       "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
         {"Date": "Aug 2026",    "Time": "10:00 IST", "Event": "RBI MPC Decision (date TBC)",               "Country": "🇮🇳 India", "Impact": "High",   "Status": "🔜 Upcoming"},
         {"Date": "17 Sep 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision + SEP Projections",   "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
         {"Date": "Oct 2026",    "Time": "10:00 IST", "Event": "RBI MPC Decision (date TBC)",               "Country": "🇮🇳 India", "Impact": "High",   "Status": "🔜 Upcoming"},
-        {"Date": "29 Oct 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision",                      "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
+        {"Date": "29 Oct 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision",                       "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
         {"Date": "10 Dec 2026", "Time": "00:30 IST", "Event": "US FOMC Rate Decision + SEP Projections",   "Country": "🇺🇸 USA",   "Impact": "High",   "Status": "🔜 Upcoming"},
         {"Date": "Dec 2026",    "Time": "10:00 IST", "Event": "RBI MPC Decision (date TBC)",               "Country": "🇮🇳 India", "Impact": "High",   "Status": "🔜 Upcoming"},
     ]
-    # ── END CALENDAR DATA ──
 
     cal_df = pd.DataFrame(events)
 
@@ -1040,37 +1033,16 @@ with tab_tv:
 
 # =============================================================================
 # TAB 7 — Telegram Channels (via RSSHub mirror fallback chain)
-# Tries 6 public RSSHub mirrors in order. Stops at first one that responds.
-# No setup, no token, no admin access required.
-#
-# ┌─────────────────────────────────────────────────────────────────┐
-# │  TO ADD A NEW TELEGRAM CHANNEL:                                 │
-# │  1. Find the channel's username (the part after t.me/)          │
-# │  2. Add a new tuple to TELEGRAM_CHANNELS in this format:        │
-# │        ("Display Name", "username", "description")              │
-# │  3. Save and push to GitHub — done. No other changes needed.    │
-# └─────────────────────────────────────────────────────────────────┘
 # =============================================================================
 with tab_twitter:
     st.markdown("#### 📬 Channels — Telegram Market Feeds")
     st.caption("Posts fetched from public Telegram channels. Refreshes every 60 sec.")
 
-    # ══════════════════════════════════════════════════════════════
-    # ADD / REMOVE TELEGRAM CHANNELS HERE
-    # Format: ("Display Name", "telegram_username", "description")
     TELEGRAM_CHANNELS = [
         ("Beat The Street News",             "Beatthestreetnews", "Latest share market news"),
         ("Beat The Street Equity Research",  "btsreports",        "Research reports & books"),
-        # ── Add more channels below this line ─────────────────────
-        # ("Zerodha Varsity",   "zerodhaonline",  "Market education & insights"),
-        # ("Moneycontrol News", "moneycontrol",   "Business & markets coverage"),
-        # ("NSE India",         "NSEIndia",       "Official NSE announcements"),
     ]
-    # ══════════════════════════════════════════════════════════════
 
-    # ── Public RSSHub mirror list (tried in order, stops at first success) ────
-    # If all fail, the app shows a clean error with direct Telegram links.
-    # Update this list if mirrors go offline: https://docs.rsshub.app/instances
     RSSHUB_MIRRORS = [
         "https://rsshub.rssforever.com",
         "https://rss.fatpandadev.com",
@@ -1085,10 +1057,6 @@ with tab_twitter:
 
     @st.cache_data(ttl=60)
     def fetch_telegram_channel(channel_username):
-        """
-        Try each RSSHub mirror in order. Return (posts, mirror_used, error).
-        Posts are returned on first mirror that gives a non-empty feed.
-        """
         import re as _re
         last_error = "All mirrors failed or returned empty feeds."
 
@@ -1124,16 +1092,15 @@ with tab_twitter:
                         "published": pub_str,
                     })
 
-                return posts, mirror, None   # success
+                return posts, mirror, None
 
             except Exception as e:
                 last_error = f"{mirror}: {e}"
                 continue
 
-        return [], None, last_error   # all mirrors failed
+        return [], None, last_error
 
     def build_channel_html(posts, err, handle, display_name, desc, mirror_used):
-        """Build a self-contained scrollable HTML block for one Telegram channel."""
         if err:
             body = f"""
             <div style="padding:20px 16px;background:#fffbeb;border:1px solid #fde68a;
@@ -1187,70 +1154,16 @@ with tab_twitter:
         return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
 <style>
   * {{ box-sizing:border-box; margin:0; padding:0; }}
-  html, body {{
-    background: #f4f6f9;
-    font-family: Inter, sans-serif;
-    height: 100%;
-  }}
-  .channel-wrap {{
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    background: #f4f6f9;
-  }}
-  .channel-header {{
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    background: #ffffff;
-    border-bottom: 2px solid #e2e8f0;
-    padding: 10px 14px 8px 14px;
-    flex-shrink: 0;
-  }}
-  .ch-title {{
-    font-size: .9rem;
-    font-weight: 700;
-    color: #1e293b;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-  }}
-  .ch-handle {{
-    font-weight: 400;
-    color: #94a3b8;
-    font-size: .75rem;
-    font-family: 'JetBrains Mono', monospace;
-  }}
-  .ch-open {{
-    display: inline-block;
-    background: #0057b8;
-    color: #fff !important;
-    padding: 3px 11px;
-    border-radius: 5px;
-    font-size: .72rem;
-    font-weight: 600;
-    text-decoration: none;
-    white-space: nowrap;
-    flex-shrink: 0;
-  }}
-  .ch-desc {{
-    font-size: .7rem;
-    color: #64748b;
-    margin-top: 2px;
-  }}
-  .channel-body {{
-    flex: 1;
-    overflow-y: auto;
-    padding: 10px 12px 16px 12px;
-    scrollbar-width: thin;
-    scrollbar-color: #cbd5e0 transparent;
-  }}
+  html, body {{ background: #f4f6f9; font-family: Inter, sans-serif; height: 100%; }}
+  .channel-wrap {{ display: flex; flex-direction: column; height: 100%; background: #f4f6f9; }}
+  .channel-header {{ position: sticky; top: 0; z-index: 10; background: #ffffff; border-bottom: 2px solid #e2e8f0; padding: 10px 14px 8px 14px; flex-shrink: 0; }}
+  .ch-title {{ font-size: .9rem; font-weight: 700; color: #1e293b; display: flex; align-items: center; justify-content: space-between; gap: 8px; }}
+  .ch-handle {{ font-weight: 400; color: #94a3b8; font-size: .75rem; font-family: 'JetBrains Mono', monospace; }}
+  .ch-open {{ display: inline-block; background: #0057b8; color: #fff !important; padding: 3px 11px; border-radius: 5px; font-size: .72rem; font-weight: 600; text-decoration: none; white-space: nowrap; flex-shrink: 0; }}
+  .ch-desc {{ font-size: .7rem; color: #64748b; margin-top: 2px; }}
+  .channel-body {{ flex: 1; overflow-y: auto; padding: 10px 12px 16px 12px; scrollbar-width: thin; scrollbar-color: #cbd5e0 transparent; }}
   .channel-body::-webkit-scrollbar {{ width: 5px; }}
-  .channel-body::-webkit-scrollbar-thumb {{
-    background: #cbd5e0;
-    border-radius: 4px;
-  }}
+  .channel-body::-webkit-scrollbar-thumb {{ background: #cbd5e0; border-radius: 4px; }}
 </style>
 </head><body>
 <div class="channel-wrap">
@@ -1270,19 +1183,17 @@ with tab_twitter:
     if not TELEGRAM_CHANNELS:
         st.info("No channels configured. Add entries to `TELEGRAM_CHANNELS` in `app.py`.")
     else:
-        # Fetch all channels first (parallel-ish — each call is cached)
         channel_data = []
         for (display_name, handle, desc) in TELEGRAM_CHANNELS:
             with st.spinner(f"Fetching @{handle}…"):
                 posts, mirror_used, err = fetch_telegram_channel(handle)
             channel_data.append((display_name, handle, desc, posts, err, mirror_used))
 
-        # Render as equal-width columns, each independently scrollable
         cols = st.columns(len(channel_data))
         if not isinstance(cols, list):
             cols = [cols]
 
-        SCROLL_HEIGHT = 820  # px — tall enough to show ~8 posts, scrollable beyond
+        SCROLL_HEIGHT = 820
 
         for col, (display_name, handle, desc, posts, err, mirror_used) in zip(cols, channel_data):
             with col:
@@ -1303,18 +1214,10 @@ with tab_twitter:
 
 # =============================================================================
 # TAB 8 — Portfolio (Zerodha Holdings Upload)
-# Upload the holdings XLSX/CSV from Zerodha Console → Reports → Holdings.
-# The file is parsed automatically — no API key, no login needed.
-#
-# ZERODHA FILE FORMAT (auto-detected):
-#   Row 22 = headers: Symbol, ISIN, Sector, Quantity Available, ...
-#   Row 23+ = holdings data
-#   Rows 14-17 = summary: Invested Value, Present Value, Unrealized P&L
 # =============================================================================
 with tab_holdings:
     st.markdown("#### 💼 Portfolio — Holdings")
 
-    # ── How to download the file ───────────────────────────────────────────────
     with st.expander("ℹ️ How to get your holdings file from Zerodha"):
         st.caption(
             "1. Open **[console.zerodha.com](https://console.zerodha.com)** → log in\n"
@@ -1324,7 +1227,6 @@ with tab_holdings:
             "**Tip:** Do this once a day after market close for accurate P&L."
         )
 
-    # ── File uploader ─────────────────────────────────────────────────────────
     uploaded_file = st.file_uploader(
         "Upload your Zerodha holdings file",
         type=["xlsx", "csv"],
@@ -1333,13 +1235,7 @@ with tab_holdings:
         help="Download from Zerodha Console → Portfolio → Holdings → Download"
     )
 
-    # ── Parser ────────────────────────────────────────────────────────────────
     def parse_zerodha_holdings(file_obj, filename):
-        """
-        Parse Zerodha holdings XLSX or CSV export.
-        Returns (df_holdings, summary_dict, error_str).
-        Summary keys: invested, present, pnl, pnl_pct
-        """
         import re as _re
         try:
             if filename.endswith('.csv'):
@@ -1347,7 +1243,6 @@ with tab_holdings:
             else:
                 raw = pd.read_excel(file_obj, header=None)
 
-            # ── Find summary values ────────────────────────────────────────────
             summary = {"invested": 0, "present": 0, "pnl": 0, "pnl_pct": 0}
             summary_map = {
                 "Invested Value":      "invested",
@@ -1359,7 +1254,6 @@ with tab_holdings:
                 for col in row:
                     if str(col).strip() in summary_map:
                         key = summary_map[str(col).strip()]
-                        # value is in the next non-null cell
                         vals = [v for v in row if str(v) not in ("nan","None","")]
                         if len(vals) >= 2:
                             try:
@@ -1367,7 +1261,6 @@ with tab_holdings:
                             except Exception:
                                 pass
 
-            # ── Find header row (contains "Symbol" and "Sector") ───────────────
             header_row = None
             for i, row in raw.iterrows():
                 row_vals = [str(v).strip() for v in row]
@@ -1378,16 +1271,13 @@ with tab_holdings:
             if header_row is None:
                 return None, summary, "Could not find header row with 'Symbol' and 'Sector'."
 
-            # ── Extract holdings data ──────────────────────────────────────────
             df = pd.read_excel(file_obj, header=header_row) if filename.endswith('.xlsx') else pd.read_csv(file_obj, header=header_row)
 
-            # Keep only rows that have a Symbol value (non-null, non-header)
             df = df[df["Symbol"].notna()].copy()
             df = df[df["Symbol"].astype(str).str.strip() != ""]
             df = df[~df["Symbol"].astype(str).str.lower().isin(["symbol","nan"])]
             df = df.reset_index(drop=True)
 
-            # ── Rename columns to standard names ──────────────────────────────
             col_map = {
                 "Symbol":                    "Symbol",
                 "ISIN":                      "ISIN",
@@ -1400,19 +1290,16 @@ with tab_holdings:
             }
             df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
 
-            # ── Coerce numeric columns ─────────────────────────────────────────
             for col in ["Qty", "Avg Price", "Prev Close", "Total P&L", "Return %"]:
                 if col in df.columns:
                     df[col] = pd.to_numeric(
                         df[col].astype(str).str.replace(",",""), errors="coerce"
                     )
 
-            # ── Derive computed columns ────────────────────────────────────────
             df["Invested"]  = (df["Avg Price"] * df["Qty"]).round(2)
             df["Cur Value"] = (df["Prev Close"] * df["Qty"]).round(2)
-            df["Day P&L"]   = 0.0   # not available in static export
+            df["Day P&L"]   = 0.0
 
-            # ── Filter zero-qty rows ───────────────────────────────────────────
             df = df[df["Qty"] > 0].copy()
 
             return df, summary, None
@@ -1420,10 +1307,8 @@ with tab_holdings:
         except Exception as e:
             return None, {}, str(e)
 
-    # ── Fetch live LTP for a batch of symbols ─────────────────────────────────
     @st.cache_data(ttl=60)
     def fetch_live_ltp(symbols_tuple):
-        """Fetch live LTP for a tuple of NSE symbols via yfinance."""
         tickers = [f"{s}.NS" for s in symbols_tuple]
         live = {}
         try:
@@ -1454,13 +1339,11 @@ with tab_holdings:
         url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={symbol}.NS&region=IN&lang=en-IN"
         return fetch_rss(url)
 
-    # ── Main rendering ────────────────────────────────────────────────────────
     if uploaded_file is None:
         st.info(
             "📂 **Upload your Zerodha holdings file above** to see your portfolio.\n\n"
             "Download it from: **Zerodha Console → Portfolio → Holdings → Download (XLSX)**"
         )
-        # Show sample of what the dashboard looks like
         st.markdown("---")
         st.markdown("**Once uploaded, you'll see:**")
         c1, c2, c3 = st.columns(3)
@@ -1477,19 +1360,16 @@ with tab_holdings:
             st.error(f"❌ Could not parse file: {parse_err}")
             st.caption("Make sure you're uploading the Zerodha Holdings XLSX/CSV file.")
         else:
-            # ── Fetch live prices ──────────────────────────────────────────────
             all_symbols = tuple(df_h["Symbol"].tolist())
             with st.spinner("Fetching live prices…"):
                 live_prices = fetch_live_ltp(all_symbols)
 
-            # Update LTP and Day P&L where live data is available
             def get_ltp(sym):
                 return live_prices.get(sym, {}).get("ltp", df_h.loc[df_h["Symbol"]==sym, "Prev Close"].iloc[0])
 
             df_h["LTP"] = df_h["Symbol"].apply(get_ltp)
             df_h["LTP"] = pd.to_numeric(df_h["LTP"], errors="coerce")
 
-            # Recalculate with live LTP
             df_h["Cur Value"]  = (df_h["LTP"] * df_h["Qty"]).round(2)
             df_h["Total P&L"]  = (df_h["Cur Value"] - df_h["Invested"]).round(2)
             df_h["Return %"]   = ((df_h["Total P&L"] / df_h["Invested"]) * 100).round(2)
@@ -1500,7 +1380,6 @@ with tab_holdings:
 
             df_h = df_h.sort_values("Cur Value", ascending=False).reset_index(drop=True)
 
-            # ── Summary Metrics ────────────────────────────────────────────────
             total_invested = df_h["Invested"].sum()
             total_cur      = df_h["Cur Value"].sum()
             total_pnl      = df_h["Total P&L"].sum()
@@ -1511,16 +1390,13 @@ with tab_holdings:
 
             m1, m2, m3, m4, m5 = st.columns(5)
             m1.metric("Invested",       f"₹{total_invested:,.0f}")
-            m2.metric("Current Value",  f"₹{total_cur:,.0f}",
-                      delta=f"₹{total_pnl:+,.0f}")
-            m3.metric("Total P&L",      f"₹{total_pnl:+,.0f}",
-                      delta=f"{total_ret_pct:+.2f}%")
+            m2.metric("Current Value",  f"₹{total_cur:,.0f}", delta=f"₹{total_pnl:+,.0f}")
+            m3.metric("Total P&L",      f"₹{total_pnl:+,.0f}", delta=f"{total_ret_pct:+.2f}%")
             m4.metric("Day P&L",        f"₹{total_day:+,.0f}")
             m5.metric("Holdings",       str(len(df_h)))
 
             st.markdown("---")
 
-            # ── Holdings Table ─────────────────────────────────────────────────
             st.markdown("##### Holdings")
 
             def _col_color(val):
@@ -1544,12 +1420,9 @@ with tab_holdings:
                     "Return %":   "{:+.2f}%",
                 })
             )
-            st.dataframe(styled, use_container_width=True,
-                         height=min(60 + len(df_h)*36, 560), hide_index=True)
+            st.dataframe(styled, use_container_width=True, height=min(60 + len(df_h)*36, 560), hide_index=True)
 
             st.markdown("---")
-
-            # ── Sector Allocation ──────────────────────────────────────────────
             st.markdown("##### Sector Allocation")
 
             sector_df = (
@@ -1611,8 +1484,6 @@ with tab_holdings:
                              use_container_width=True, height=380, hide_index=True)
 
             st.markdown("---")
-
-            # ── Top Gainers & Losers ───────────────────────────────────────────
             st.markdown("##### Top Gainers & Losers")
             gl1, gl2 = st.columns(2)
             top_gain = df_h.nlargest(5, "Return %")[["Symbol","Sector","Return %","Total P&L"]]
@@ -1636,15 +1507,6 @@ with tab_holdings:
                 )
 
             st.markdown("---")
-
-            st.markdown("---")
-
-            # ================================================================
-            # RED FLAGS & BUY/HOLD/SELL SIGNALS
-            # Technical: RSI, MACD, 200 EMA, 50 EMA, Bollinger, 52w position
-            # Fundamental: P/E, P/B, Debt/Equity, ROE, profit margin,
-            #              current ratio, EPS growth, revenue growth
-            # ================================================================
             st.markdown("##### 🚨 Red Flags & Signals")
             st.caption("Technical + Fundamental screening for all holdings. Not financial advice.")
 
@@ -1722,8 +1584,8 @@ with tab_holdings:
 
             def score_and_flags(tech, fund, ret_pct, pledge_pct):
                 score = 0
-                tf = []   # technical flags
-                ff = []   # fundamental flags
+                tf = []
+                ff = []
 
                 if tech:
                     if tech["above_200"]:
@@ -1873,12 +1735,6 @@ with tab_holdings:
             )
 
             st.markdown("---")
-
-            # ================================================================
-            # PORTFOLIO NEWS FEED — PER COMPANY SCROLLABLE PANELS
-            # 2 companies per row, each panel has sticky header + scrollable body
-            # Sources: Yahoo Finance, Mint, Business Standard, NSE Announcements
-            # ================================================================
             st.markdown("##### 📰 Portfolio News Feed")
             st.caption("Each panel shows all news for one company. Scroll within each panel. 2 columns, sorted by portfolio value.")
 
@@ -1975,7 +1831,6 @@ with tab_holdings:
                     if s:
                         news_by_sym[s].append(item)
 
-                # Only render panels for companies that have at least one article
                 syms_with_news = [s for s in df_h["Symbol"].tolist() if news_by_sym.get(s)]
                 syms_no_news   = [s for s in df_h["Symbol"].tolist() if not news_by_sym.get(s)]
                 PANEL_H = 560
@@ -2067,9 +1922,6 @@ with tab_holdings:
 
 # =============================================================================
 # TAB 9 — Equity Research (AI-Powered Institutional Analysis)
-# Uses Gemini 2.0 Flash via the Google Gemini API.
-# The full 15-section institutional research prompt is sent with the company name.
-# Output streams section by section. Multi-part reports use "Continue" button.
 # =============================================================================
 with tab_research:
     st.markdown("#### 🔍 Equity Research — AI Institutional Analysis")
@@ -2079,7 +1931,6 @@ with tab_research:
         "risk framework, and more. Methodology: Goldman/JPMorgan calibre. Powered by Gemini."
     )
 
-    # ── Prompt constants ──────────────────────────────────────────────────────
     RESEARCH_SYSTEM_PROMPT = """You are a senior equity research analyst with 20+ years of institutional experience across bulge-bracket and elite boutique firms — equivalent in calibre to lead analysts at Goldman Sachs, JPMorgan, Morgan Stanley, UBS, Barclays, HSBC, Bank of America, Citi, and Jefferies. You have deep expertise across all sectors, market caps, and geographies, covering both listed equities and private companies.
 
 Your output will be consumed exclusively by senior buy-side and sell-side professionals, portfolio managers, and capital allocators. Do not simplify, do not hedge unnecessarily, do not add disclaimers beyond those standard in institutional research. Use the full vocabulary of the profession: EV/EBITDA, FCF yield, ROIC, WACC, NTM multiples, comps, DCF, sum-of-the-parts, operating leverage, convexity, downside protection, and all other technical terminology as required. The reader is sophisticated. Speak to them accordingly.
@@ -2125,15 +1976,13 @@ ANALYTICAL STANDARDS:
   To continue: reply with "Continue"
 → When the user sends "Continue", resume from the next section without re-introducing the company."""
 
-    # ── Session state ─────────────────────────────────────────────────────────
     if "research_messages" not in st.session_state:
-        st.session_state.research_messages = []   # list of {role, content}
+        st.session_state.research_messages = []
     if "research_company" not in st.session_state:
         st.session_state.research_company  = ""
     if "research_running" not in st.session_state:
         st.session_state.research_running  = False
 
-    # ── Input row ─────────────────────────────────────────────────────────────
     ri1, ri2, ri3 = st.columns([3, 1, 1])
     with ri1:
         company_input = st.text_input(
@@ -2152,7 +2001,6 @@ ANALYTICAL STANDARDS:
         st.session_state.research_company  = ""
         st.rerun()
 
-    # ── Trigger new report ────────────────────────────────────────────────────
     if run_btn and company_input.strip():
         company = company_input.strip()
         st.session_state.research_company  = company
@@ -2161,7 +2009,6 @@ ANALYTICAL STANDARDS:
         ]
         st.rerun()
 
-    # ── Continue button (shown when report is paused) ─────────────────────────
     last_content = ""
     if st.session_state.research_messages:
         last_msg = st.session_state.research_messages[-1]
@@ -2177,7 +2024,6 @@ ANALYTICAL STANDARDS:
             )
             st.rerun()
 
-    # ── Display existing conversation ─────────────────────────────────────────
     if st.session_state.research_messages:
         company_label = st.session_state.research_company
         if company_label:
@@ -2197,16 +2043,13 @@ ANALYTICAL STANDARDS:
                     unsafe_allow_html=True
                 )
             elif msg["role"] == "assistant":
-                # Render the report in a styled scrollable container
                 import html as _html
                 safe_content = msg["content"]
 
-                # Style section headers (lines starting with digit+dot or === lines)
                 import re as _re
                 lines = safe_content.split('\n')
                 styled_lines = []
                 for line in lines:
-                    # Section headers like "1. COVER PAGE" or "══════"
                     if _re.match(r'^─+$', line) or _re.match(r'^═+$', line):
                         styled_lines.append(f'<hr style="border:none;border-top:1px solid #e2e8f0;margin:12px 0;">')
                     elif _re.match(r'^\d+\.\s+[A-Z]', line):
@@ -2257,9 +2100,6 @@ ANALYTICAL STANDARDS:
                     scrolling=True,
                 )
 
-    # ── Run the API call (Google Gemini — free tier) ─────────────────────────
-    # Get free API key at: https://aistudio.google.com
-    # Add to Streamlit Cloud → Settings → Secrets:  GEMINI_API_KEY = "AIza..."
     msgs = st.session_state.research_messages
     if msgs and msgs[-1]["role"] == "user":
         with st.spinner("Generating institutional research report… this takes 30–60 seconds."):
@@ -2277,8 +2117,6 @@ ANALYTICAL STANDARDS:
                     )
                     st.stop()
 
-                # Convert conversation history to Gemini format
-                # Gemini uses "parts" instead of "content", and "model" instead of "assistant"
                 gemini_contents = []
                 for m in msgs:
                     role = "model" if m["role"] == "assistant" else "user"
@@ -2287,7 +2125,6 @@ ANALYTICAL STANDARDS:
                         "parts": [{"text": m["content"]}]
                     })
 
-                # Gemini 1.5 Pro — free tier: 15 RPM, 1M TPD
                 _gemini_url = (
                     f"https://generativelanguage.googleapis.com/v1beta/models/"
                     f"gemini-2.0-flash:generateContent?key={_gemini_key}"
@@ -2309,7 +2146,6 @@ ANALYTICAL STANDARDS:
                 )
                 data = resp.json()
 
-                # Extract text from Gemini response structure
                 if "candidates" in data and data["candidates"]:
                     text = (
                         data["candidates"][0]
