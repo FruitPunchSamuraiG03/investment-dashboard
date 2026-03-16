@@ -589,7 +589,7 @@ with st.sidebar:
     kite_api_key = st.secrets.get("KITE_API_KEY", "") if hasattr(st, "secrets") else ""
 
     if not kite_api_key:
-        st.caption("⚠️ Add KITE_API_KEY & KITE_API_SECRET to Streamlit Secrets to enable portfolio.")
+        st.caption("⚠️ Add KITE_API_KEY to Streamlit Secrets to enable portfolio.")
     elif not KITE_AVAILABLE:
         st.caption("⚠️ kiteconnect package not installed.")
     else:
@@ -598,34 +598,40 @@ with st.sidebar:
         _login_url = _kite_tmp.login_url()
 
         if "kite_access_token" not in st.session_state:
+            # Publisher plan: access_token is returned directly in the redirect URL.
+            # Publisher plan: access_token returned directly in redirect URL. No secret needed.
+            # Redirect URL after login looks like:
+            #   https://127.0.0.1/?access_token=XXXX&request_token=YYYY&action=login&status=success
+            # User copies just the access_token value and pastes it below.
             st.markdown(
-                (
-                    f'<a href="{_login_url}" target="_blank" '
-                    f'style="display:inline-block;width:100%;text-align:center;'
-                    f'background:#387ed1;color:#fff;padding:7px 0;border-radius:6px;'
-                    f'font-size:.78rem;font-weight:600;text-decoration:none;'
-                    f'font-family:Inter,sans-serif;box-sizing:border-box;">'
-                    f'🔐 Login with Zerodha</a>'
-                ),
+                f'<a href="{_login_url}" target="_blank" '
+                f'style="display:inline-block;width:100%;text-align:center;'
+                f'background:#387ed1;color:#fff;padding:7px 0;border-radius:6px;'
+                f'font-size:.78rem;font-weight:600;text-decoration:none;'
+                f'font-family:Inter,sans-serif;box-sizing:border-box;">'
+                f'🔐 Login with Zerodha</a>',
                 unsafe_allow_html=True
             )
-            st.caption("Opens Zerodha login in a new tab. After logging in, paste the request_token below.")
-            _req_token = st.text_input(
-                "Paste request_token here", value="",
-                placeholder="ab12cd34ef56...", key="kite_req_token",
+            st.caption(
+                "After login, your browser goes to a URL like:\n"
+                "`https://127.0.0.1/?access_token=XXXX&...`\n"
+                "Copy the **access_token** value and paste it below."
+            )
+            _access_token_input = st.text_input(
+                "Paste access_token here", value="",
+                placeholder="xxxxxxxxxxxxxx", key="kite_access_input",
                 type="password"
             )
-            if _req_token.strip():
+            if _access_token_input.strip():
+                st.session_state.kite_access_token = _access_token_input.strip()
+                # Fetch user name from Zerodha profile endpoint
                 try:
-                    kite_api_secret = st.secrets.get("KITE_API_SECRET", "")
-                    _sess = _kite_tmp.generate_session(
-                        _req_token.strip(), api_secret=kite_api_secret
-                    )
-                    st.session_state.kite_access_token = _sess["access_token"]
-                    st.session_state.kite_user         = _sess.get("user_name", "")
-                    st.rerun()
-                except Exception as _e:
-                    st.error(f"Login failed: {_e}")
+                    _kite_tmp.set_access_token(_access_token_input.strip())
+                    _profile = _kite_tmp.profile()
+                    st.session_state.kite_user = _profile.get("user_name", "")
+                except Exception:
+                    st.session_state.kite_user = ""
+                st.rerun()
         else:
             _uname = st.session_state.get("kite_user", "")
             st.success(f"✅ Connected{' · ' + _uname if _uname else ''}")
@@ -1311,7 +1317,7 @@ with tab_twitter:
 
 # =============================================================================
 # TAB 8 — Portfolio (Zerodha Kite Connect)
-# Requires KITE_API_KEY and KITE_API_SECRET in Streamlit Secrets.
+# Requires KITE_API_KEY in Streamlit Secrets (Publisher plan — no API secret needed).
 # Daily login flow: click "Login with Zerodha" in sidebar → paste request_token.
 # Access token expires every day at 6:00 AM IST (Zerodha policy, not changeable).
 # =============================================================================
@@ -1353,6 +1359,7 @@ with tab_holdings:
     # ── Gate: check login state ───────────────────────────────────────────────
     kite_api_key_main = st.secrets.get("KITE_API_KEY", "") if hasattr(st, "secrets") else ""
     access_token      = st.session_state.get("kite_access_token", "")
+    # Publisher plan: no API secret needed — access_token is obtained directly from login redirect
 
     if not KITE_AVAILABLE:
         st.warning(
@@ -1369,16 +1376,15 @@ with tab_holdings:
             "4. Streamlit Cloud → your app → ⋮ → **Settings → Secrets** → add:\n"
             "```toml\n"
             "KITE_API_KEY = \"your_api_key\"\n"
-            "KITE_API_SECRET = \"your_api_secret\"\n"
             "```\n"
             "5. Click ↺ Refresh"
         )
     elif not access_token:
         st.info(
             "🔐 **Not connected.** Use the **Login with Zerodha** button in the sidebar to connect.\n\n"
-            "After logging in on Zerodha's page, the URL will look like:\n"
-            "`https://127.0.0.1/?request_token=XXXXXXXX&action=login&status=success`\n\n"
-            "Copy the `request_token` value and paste it in the sidebar input."
+            "After logging in, your browser redirects to a URL like:\n"
+            "`https://127.0.0.1/?access_token=XXXXXXXX&request_token=YYYY&action=login&status=success`\n\n"
+            "Copy the **access_token** value (not request_token) and paste it into the sidebar input."
         )
     else:
         # ── Fetch holdings ────────────────────────────────────────────────────
@@ -1564,7 +1570,7 @@ with tab_holdings:
         st.markdown("---")
         st.markdown(
             '<div style="font-size:.72rem;color:#94a3b8;font-family:JetBrains Mono,monospace;">'
-            "💼 Holdings via Zerodha Kite Connect API · LTP refreshes every 60 sec · "
+            "💼 Holdings via Zerodha Kite Connect Publisher API · LTP refreshes every 60 sec · "
             "Sector data via yfinance · News via Yahoo Finance RSS · "
             "Token expires 6 AM IST daily."
             '</div>',
