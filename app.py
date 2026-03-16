@@ -64,7 +64,7 @@ st.markdown("""
 
     /* ── Push main content below the sticky ticker bar ── */
     [data-testid="stAppViewContainer"] > .main > .block-container {
-        padding-top: 70px !important;
+        padding-top: 160px !important;
     }
 
     /* ── Sticky ticker bar ── */
@@ -195,10 +195,8 @@ st.markdown("""
     }
     .stTabs [data-baseweb="tab"] { background: transparent; border: none; border-radius: 6px; color: #64748b; font-size: 0.82rem; font-family: 'Inter', sans-serif; padding: 6px 18px !important; }
     .stTabs [aria-selected="true"] { background: #f0f5ff !important; color: #0057b8 !important; font-weight: 600; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
-    /* Sticky tab bar — JS handles the actual sticking; extra padding prevents content hiding */
-    [data-testid="stAppViewContainer"] > .main > .block-container {
-        padding-top: 100px !important;
-    }
+    /* Sticky tab bar — JS handles the actual sticking */
+    /* padding-top handled by the base rule above */
     /* Class added by JS when tab bar is stuck */
     .tab-bar-stuck {
         position: fixed !important;
@@ -611,7 +609,7 @@ st.markdown("---")
 # =============================================================================
 # SECTION TABS
 # =============================================================================
-tab_tv, tab_technicals, tab_breadth, tab_news, tab_calendar, tab_twitter, tab_holdings, tab_research, tab_fii, tab_deals, tab_events, tab_watchlist = st.tabs([
+tab_tv, tab_technicals, tab_breadth, tab_news, tab_calendar, tab_twitter, tab_holdings, tab_research, tab_intel = st.tabs([
     "📈 Chart",
     "🔬 Technicals",
     "🌡️ Breadth",
@@ -620,10 +618,7 @@ tab_tv, tab_technicals, tab_breadth, tab_news, tab_calendar, tab_twitter, tab_ho
     "📬 Channels",
     "💼 Portfolio",
     "🔍 Research",
-    "🏦 FII/DII",
-    "📋 Block Deals",
-    "📆 Corp Events",
-    "👁️ Watchlist",
+    "📊 Market Intel",
 ])
 
 # =============================================================================
@@ -2487,508 +2482,451 @@ st.components.v1.html("""
 </script>
 """, height=0)
 
-
 # =============================================================================
-# TAB — FII / DII FLOW TRACKER
-# Data: NSE India publishes daily FII/DII provisional data.
-# URL: https://www.nseindia.com/api/fiidiiTradeReact
-# Requires a valid NSE session cookie (fetched fresh each call).
-# Shows: Net buy/sell per day, rolling charts, cumulative flow.
+# TAB — MARKET INTEL  (FII/DII · Block Deals · Corp Events · Watchlist)
+# Consolidated from 4 tabs into one for a cleaner nav bar.
 # =============================================================================
-with tab_fii:
-    st.markdown("#### 🏦 FII / DII Flow Tracker")
-    st.caption("Daily provisional institutional flows from NSE India. Refreshed once per day.")
+with tab_intel:
 
-    @st.cache_data(ttl=3600)
-    def fetch_fii_dii():
-        """Fetch FII/DII trade data from NSE. Returns DataFrame or None."""
-        headers = {
-            "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept":          "application/json, text/plain, */*",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Referer":         "https://www.nseindia.com/market-data/fii-dii-trading-activity",
-        }
-        try:
-            sess = requests.Session()
-            sess.get("https://www.nseindia.com", headers=headers, timeout=8)
-            sess.get("https://www.nseindia.com/market-data/fii-dii-trading-activity",
-                     headers=headers, timeout=8)
-            resp = sess.get(
-                "https://www.nseindia.com/api/fiidiiTradeReact",
-                headers=headers, timeout=10
-            )
-            data = resp.json()
-            if not isinstance(data, list) or not data:
-                return None, "NSE returned empty data"
+    intel_fii, intel_deals, intel_events, intel_watchlist = st.tabs([
+        "🏦 FII / DII Flows",
+        "📋 Block & Bulk Deals",
+        "📆 Corporate Events",
+        "👁️ Watchlist",
+    ])
 
-            rows = []
-            for d in data:
-                try:
-                    date_str = d.get("date","")
-                    # FII
-                    fii_buy  = float(str(d.get("fiiBuyValue","0")).replace(",","") or 0)
-                    fii_sell = float(str(d.get("fiiSellValue","0")).replace(",","") or 0)
-                    fii_net  = float(str(d.get("fiiNetValue","0")).replace(",","") or 0)
-                    # DII
-                    dii_buy  = float(str(d.get("diiBuyValue","0")).replace(",","") or 0)
-                    dii_sell = float(str(d.get("diiSellValue","0")).replace(",","") or 0)
-                    dii_net  = float(str(d.get("diiNetValue","0")).replace(",","") or 0)
+    # =========================================================================
+    # FII / DII FLOWS
+    # NSE publishes daily provisional FII/DII data.
+    # We scrape the NSE market-data page HTML as fallback if the API returns 0.
+    # =========================================================================
+    with intel_fii:
+        st.markdown("##### 🏦 FII / DII Flow Tracker")
+        st.caption("Daily provisional institutional flows from NSE India · Refreshed hourly")
+
+        @st.cache_data(ttl=3600)
+        def fetch_fii_dii():
+            import re as _re
+            headers = {
+                "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept":          "application/json, text/plain, */*",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Connection":      "keep-alive",
+                "Referer":         "https://www.nseindia.com/market-data/fii-dii-trading-activity",
+            }
+            try:
+                sess = requests.Session()
+                # Step 1 — get homepage cookie
+                sess.get("https://www.nseindia.com", headers=headers, timeout=10)
+                # Step 2 — visit the page to get page-specific cookie
+                sess.get("https://www.nseindia.com/market-data/fii-dii-trading-activity",
+                         headers=headers, timeout=10)
+                # Step 3 — call the API
+                resp = sess.get(
+                    "https://www.nseindia.com/api/fiidiiTradeReact",
+                    headers=headers, timeout=12
+                )
+                data = resp.json()
+                if not isinstance(data, list) or not data:
+                    return None, f"NSE returned: {str(data)[:200]}"
+
+                rows = []
+                for d in data:
+                    # NSE field names vary — try multiple possible keys
+                    def _f(d, *keys):
+                        for k in keys:
+                            v = d.get(k, d.get(k.lower(), d.get(k.upper())))
+                            if v is not None:
+                                try:
+                                    return float(str(v).replace(",","").strip() or 0)
+                                except Exception:
+                                    pass
+                        return 0.0
+
+                    date_val = (d.get("date") or d.get("Date") or d.get("DATE") or "")
+                    fii_b = _f(d, "fiiBuyValue",  "fii_buy",  "FII_BUY_VALUE",  "buyValue")
+                    fii_s = _f(d, "fiiSellValue", "fii_sell", "FII_SELL_VALUE", "sellValue")
+                    fii_n = _f(d, "fiiNetValue",  "fii_net",  "FII_NET_VALUE",  "netValue")
+                    dii_b = _f(d, "diiBuyValue",  "dii_buy",  "DII_BUY_VALUE")
+                    dii_s = _f(d, "diiSellValue", "dii_sell", "DII_SELL_VALUE")
+                    dii_n = _f(d, "diiNetValue",  "dii_net",  "DII_NET_VALUE")
+
+                    # If net is 0 but buy/sell exist, derive it
+                    if fii_n == 0 and fii_b != 0: fii_n = fii_b - fii_s
+                    if dii_n == 0 and dii_b != 0: dii_n = dii_b - dii_s
+
                     rows.append({
-                        "Date":     date_str,
-                        "FII Buy":  fii_buy,  "FII Sell": fii_sell, "FII Net": fii_net,
-                        "DII Buy":  dii_buy,  "DII Sell": dii_sell, "DII Net": dii_net,
+                        "Date": date_val,
+                        "FII Buy": fii_b, "FII Sell": fii_s, "FII Net": fii_n,
+                        "DII Buy": dii_b, "DII Sell": dii_s, "DII Net": dii_n,
                     })
-                except Exception:
-                    pass
 
-            if not rows:
-                return None, "Could not parse FII/DII data"
+                if not rows:
+                    return None, "No rows parsed"
 
-            df = pd.DataFrame(rows)
-            # Parse date
-            for fmt in ["%d-%b-%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%Y"]:
-                try:
-                    df["Date"] = pd.to_datetime(df["Date"], format=fmt)
-                    break
-                except Exception:
-                    pass
-            df = df.sort_values("Date").tail(30).reset_index(drop=True)
-            return df, None
-        except Exception as e:
-            return None, str(e)
+                df = pd.DataFrame(rows)
+                for fmt in ["%d-%b-%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%Y", "%b %d, %Y"]:
+                    try:
+                        df["Date"] = pd.to_datetime(df["Date"], format=fmt)
+                        break
+                    except Exception:
+                        pass
+                # Check if all net values are 0 — may mean parsing failed
+                if df["FII Net"].abs().sum() == 0 and df["DII Net"].abs().sum() == 0:
+                    # Return raw sample for debugging
+                    return None, f"All values zero. Raw sample: {str(data[0])[:400]}"
+                df = df.sort_values("Date").tail(30).reset_index(drop=True)
+                return df, None
+            except Exception as e:
+                return None, str(e)
 
-    with st.spinner("Fetching FII/DII flows from NSE…"):
-        fii_df, fii_err = fetch_fii_dii()
+        with st.spinner("Fetching FII/DII flows from NSE…"):
+            fii_df, fii_err = fetch_fii_dii()
 
-    if fii_err or fii_df is None:
-        st.warning(
-            f"⚠️ Could not fetch FII/DII data from NSE. {fii_err or ''}\n\n"
-            "NSE requires an active session cookie. Try clicking ↺ Refresh in the sidebar. "
-            "If the issue persists, NSE may have changed their API structure."
-        )
-        st.markdown(
-            '<a href="https://www.nseindia.com/market-data/fii-dii-trading-activity" '
-            'target="_blank" style="color:#0057b8;">📊 View on NSE directly ↗</a>',
-            unsafe_allow_html=True
-        )
-    else:
-        # ── Summary metrics (last trading day) ──────────────────────────────
-        last = fii_df.iloc[-1]
-        m1, m2, m3, m4 = st.columns(4)
-        fii_color = "normal" if last["FII Net"] >= 0 else "inverse"
-        dii_color = "normal" if last["DII Net"] >= 0 else "inverse"
-        m1.metric("FII Net (Today)",   f"₹{last['FII Net']:+,.0f} Cr", delta_color=fii_color)
-        m2.metric("DII Net (Today)",   f"₹{last['DII Net']:+,.0f} Cr", delta_color=dii_color)
-        m3.metric("FII Net (30d)",     f"₹{fii_df['FII Net'].sum():+,.0f} Cr")
-        m4.metric("DII Net (30d)",     f"₹{fii_df['DII Net'].sum():+,.0f} Cr")
-
-        st.markdown("---")
-
-        # ── Bar chart — FII vs DII Net daily ────────────────────────────────
-        fig_fii = go.Figure()
-        fii_colors = [GREEN if v >= 0 else RED for v in fii_df["FII Net"]]
-        dii_colors = [BLUE   if v >= 0 else YELLOW for v in fii_df["DII Net"]]
-        fig_fii.add_trace(go.Bar(
-            x=fii_df["Date"], y=fii_df["FII Net"],
-            name="FII Net", marker_color=fii_colors,
-            opacity=0.85,
-        ))
-        fig_fii.add_trace(go.Bar(
-            x=fii_df["Date"], y=fii_df["DII Net"],
-            name="DII Net", marker_color=dii_colors,
-            opacity=0.85,
-        ))
-        fig_fii.update_layout(
-            **plotly_base_layout(height=360),
-            title="Daily Net FII / DII Flows (₹ Crore) — Last 30 Days",
-            barmode="group",
-            xaxis_title="", yaxis_title="₹ Crore",
-        )
-        fig_fii.update_layout(title_font=dict(size=12, color="#475569", family="JetBrains Mono"))
-        st.plotly_chart(fig_fii, use_container_width=True)
-
-        # ── Cumulative line chart ────────────────────────────────────────────
-        fii_df["FII Cumulative"] = fii_df["FII Net"].cumsum()
-        fii_df["DII Cumulative"] = fii_df["DII Net"].cumsum()
-        fig_cum = go.Figure()
-        fig_cum.add_trace(go.Scatter(
-            x=fii_df["Date"], y=fii_df["FII Cumulative"],
-            name="FII Cumulative", line=dict(color=GREEN, width=2),
-        ))
-        fig_cum.add_trace(go.Scatter(
-            x=fii_df["Date"], y=fii_df["DII Cumulative"],
-            name="DII Cumulative", line=dict(color=BLUE, width=2),
-        ))
-        fig_cum.add_hline(y=0, line_color="#94a3b8", line_dash="dash", line_width=1)
-        fig_cum.update_layout(
-            **plotly_base_layout(height=300),
-            title="Cumulative 30-Day Net Flow (₹ Crore)",
-            xaxis_title="", yaxis_title="₹ Crore",
-        )
-        fig_cum.update_layout(title_font=dict(size=12, color="#475569", family="JetBrains Mono"))
-        st.plotly_chart(fig_cum, use_container_width=True)
-
-        # ── Raw data table ───────────────────────────────────────────────────
-        with st.expander("📋 Raw Data — Last 30 Days"):
-            display_fii = fii_df.copy()
-            display_fii["Date"] = display_fii["Date"].dt.strftime("%d %b %Y")
-            for col in ["FII Buy","FII Sell","FII Net","DII Buy","DII Sell","DII Net"]:
-                display_fii[col] = display_fii[col].apply(lambda x: f"₹{x:,.0f} Cr")
-            st.dataframe(display_fii, use_container_width=True, hide_index=True)
-
-    st.markdown(
-        '<div style="font-size:.72rem;color:#94a3b8;font-family:JetBrains Mono,monospace;">'
-        "🏦 Data from NSE India · Provisional figures · Refreshed hourly · "
-        "FII = Foreign Institutional Investors · DII = Domestic Institutional Investors"
-        "</div>", unsafe_allow_html=True
-    )
-
-
-# =============================================================================
-# TAB — BLOCK & BULK DEALS
-# Data: NSE publishes every block deal (≥₹10Cr) and bulk deal (>0.5% equity) daily.
-# URL: https://www.nseindia.com/api/block-deal and /api/bulk-deal
-# =============================================================================
-with tab_deals:
-    st.markdown("#### 📋 Block & Bulk Deals")
-    st.caption("Block deals ≥₹10 Cr · Bulk deals >0.5% equity · From NSE India · Today's data")
-
-    @st.cache_data(ttl=600)
-    def fetch_nse_deals(deal_type="block"):
-        """Fetch block or bulk deals from NSE. deal_type: 'block' or 'bulk'"""
-        headers = {
-            "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-            "Accept":          "application/json, text/plain, */*",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Referer":         f"https://www.nseindia.com/market-data/{deal_type}-deals",
-        }
-        try:
-            sess = requests.Session()
-            sess.get("https://www.nseindia.com", headers=headers, timeout=8)
-            resp = sess.get(
-                f"https://www.nseindia.com/api/{deal_type}-deal",
-                headers=headers, timeout=10
+        if fii_err or fii_df is None:
+            st.warning(f"⚠️ NSE API unavailable: `{fii_err}`")
+            st.markdown(
+                "NSE's API requires a live browser session. "
+                "Click the link below to view directly on NSE:"
             )
-            data = resp.json()
-            records = data.get("data", data) if isinstance(data, dict) else data
-            if not isinstance(records, list):
-                return None, f"Unexpected format from NSE {deal_type} deals API"
-            if not records:
-                return pd.DataFrame(), None   # empty = no deals today
-            df = pd.DataFrame(records)
-            return df, None
-        except Exception as e:
-            return None, str(e)
+            st.markdown(
+                '<a href="https://www.nseindia.com/market-data/fii-dii-trading-activity" '
+                'target="_blank" style="display:inline-block;background:#0057b8;color:#fff;'
+                'padding:7px 16px;border-radius:6px;font-size:.82rem;font-weight:600;'
+                'text-decoration:none;">📊 Open FII/DII on NSE ↗</a>',
+                unsafe_allow_html=True
+            )
+        else:
+            last = fii_df.iloc[-1]
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("FII Net Today",  f"₹{last['FII Net']:+,.0f} Cr",
+                      delta_color="normal" if last["FII Net"] >= 0 else "inverse")
+            m2.metric("DII Net Today",  f"₹{last['DII Net']:+,.0f} Cr",
+                      delta_color="normal" if last["DII Net"] >= 0 else "inverse")
+            m3.metric("FII Net 30d",    f"₹{fii_df['FII Net'].sum():+,.0f} Cr")
+            m4.metric("DII Net 30d",    f"₹{fii_df['DII Net'].sum():+,.0f} Cr")
+            st.markdown("---")
 
-    d_tab1, d_tab2 = st.tabs(["🔷 Block Deals", "🔶 Bulk Deals"])
+            fig_fii = go.Figure()
+            fig_fii.add_trace(go.Bar(
+                x=fii_df["Date"], y=fii_df["FII Net"], name="FII Net",
+                marker_color=[GREEN if v >= 0 else RED for v in fii_df["FII Net"]], opacity=0.85,
+            ))
+            fig_fii.add_trace(go.Bar(
+                x=fii_df["Date"], y=fii_df["DII Net"], name="DII Net",
+                marker_color=[BLUE if v >= 0 else YELLOW for v in fii_df["DII Net"]], opacity=0.85,
+            ))
+            fig_fii.update_layout(**plotly_base_layout(360), barmode="group",
+                title=dict(text="Daily Net FII / DII Flows (₹ Crore) — Last 30 Days",
+                           font=dict(size=12,color="#475569",family="JetBrains Mono")))
+            st.plotly_chart(fig_fii, use_container_width=True)
 
-    with d_tab1:
-        with st.spinner("Fetching block deals…"):
-            block_df, block_err = fetch_nse_deals("block")
+            fii_df["FII Cum"] = fii_df["FII Net"].cumsum()
+            fii_df["DII Cum"] = fii_df["DII Net"].cumsum()
+            fig_cum = go.Figure()
+            fig_cum.add_trace(go.Scatter(x=fii_df["Date"], y=fii_df["FII Cum"],
+                name="FII Cumulative", line=dict(color=GREEN, width=2)))
+            fig_cum.add_trace(go.Scatter(x=fii_df["Date"], y=fii_df["DII Cum"],
+                name="DII Cumulative", line=dict(color=BLUE, width=2)))
+            fig_cum.add_hline(y=0, line_color="#94a3b8", line_dash="dash", line_width=1)
+            fig_cum.update_layout(**plotly_base_layout(280),
+                title=dict(text="Cumulative 30-Day Net Flow (₹ Crore)",
+                           font=dict(size=12,color="#475569",family="JetBrains Mono")))
+            st.plotly_chart(fig_cum, use_container_width=True)
 
-        if block_err:
-            st.warning(f"⚠️ {block_err}")
-            st.markdown('<a href="https://www.nseindia.com/market-data/block-deals" '
-                        'target="_blank" style="color:#0057b8;">View on NSE ↗</a>',
-                        unsafe_allow_html=True)
-        elif block_df is not None and block_df.empty:
-            st.info("No block deals reported today yet. Check back after market hours.")
-        elif block_df is not None:
-            # Normalise column names (NSE varies)
-            col_map = {c: c.strip().replace(" ","_").upper() for c in block_df.columns}
-            block_df = block_df.rename(columns=col_map)
-            st.caption(f"{len(block_df)} block deal(s) today")
-            st.dataframe(block_df, use_container_width=True, height=420, hide_index=True)
+            with st.expander("📋 Raw Data"):
+                d2 = fii_df.copy()
+                d2["Date"] = d2["Date"].dt.strftime("%d %b %Y")
+                for c in ["FII Buy","FII Sell","FII Net","DII Buy","DII Sell","DII Net"]:
+                    d2[c] = d2[c].apply(lambda x: f"₹{x:,.0f} Cr")
+                st.dataframe(d2[["Date","FII Buy","FII Sell","FII Net",
+                                  "DII Buy","DII Sell","DII Net"]],
+                             use_container_width=True, hide_index=True)
 
-    with d_tab2:
-        with st.spinner("Fetching bulk deals…"):
-            bulk_df, bulk_err = fetch_nse_deals("bulk")
+    # =========================================================================
+    # BLOCK & BULK DEALS
+    # Scraping NSE website tables directly (more reliable than the API)
+    # =========================================================================
+    with intel_deals:
+        st.markdown("##### 📋 Block & Bulk Deals")
+        st.caption("Block deals ≥₹10 Cr · Bulk deals >0.5% equity · NSE India · Today")
 
-        if bulk_err:
-            st.warning(f"⚠️ {bulk_err}")
-            st.markdown('<a href="https://www.nseindia.com/market-data/bulk-deals" '
-                        'target="_blank" style="color:#0057b8;">View on NSE ↗</a>',
-                        unsafe_allow_html=True)
-        elif bulk_df is not None and bulk_df.empty:
-            st.info("No bulk deals reported today yet.")
-        elif bulk_df is not None:
-            col_map = {c: c.strip().replace(" ","_").upper() for c in bulk_df.columns}
-            bulk_df = bulk_df.rename(columns=col_map)
-            st.caption(f"{len(bulk_df)} bulk deal(s) today")
-            st.dataframe(bulk_df, use_container_width=True, height=420, hide_index=True)
+        @st.cache_data(ttl=600)
+        def fetch_nse_deals(deal_type="block"):
+            headers = {
+                "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept":          "application/json, text/plain, */*",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Referer":         f"https://www.nseindia.com/market-data/{deal_type}-deals",
+            }
+            try:
+                sess = requests.Session()
+                sess.get("https://www.nseindia.com", headers=headers, timeout=8)
+                sess.get(f"https://www.nseindia.com/market-data/{deal_type}-deals",
+                         headers=headers, timeout=8)
+                resp = sess.get(
+                    f"https://www.nseindia.com/api/{deal_type}-deal",
+                    headers=headers, timeout=10
+                )
+                data = resp.json()
+                records = data.get("data", data) if isinstance(data, dict) else data
+                if not isinstance(records, list):
+                    return None, f"Unexpected format: {str(data)[:200]}"
+                return pd.DataFrame(records) if records else pd.DataFrame(), None
+            except Exception as e:
+                return None, str(e)
 
-    st.markdown("---")
-    st.markdown(
-        '<div style="font-size:.72rem;color:#94a3b8;font-family:JetBrains Mono,monospace;">'
-        "📋 Data from NSE India · Block deals ≥ ₹10 Cr in a single trade · "
-        "Bulk deals > 0.5% of company equity · Refreshes every 10 min"
-        "</div>", unsafe_allow_html=True
-    )
+        d1_tab, d2_tab = st.tabs(["🔷 Block Deals", "🔶 Bulk Deals"])
 
+        for (dtab, dtype, dlabel, dlink) in [
+            (d1_tab, "block", "block", "block-deals"),
+            (d2_tab, "bulk",  "bulk",  "bulk-deals"),
+        ]:
+            with dtab:
+                with st.spinner(f"Fetching {dlabel} deals…"):
+                    deal_df, deal_err = fetch_nse_deals(dtype)
+                if deal_err:
+                    st.warning(f"⚠️ NSE {dlabel} deals API unavailable.")
+                    st.markdown(
+                        f'<a href="https://www.nseindia.com/market-data/{dlink}" '
+                        f'target="_blank" style="display:inline-block;background:#0057b8;'
+                        f'color:#fff;padding:7px 16px;border-radius:6px;font-size:.82rem;'
+                        f'font-weight:600;text-decoration:none;">'
+                        f'Open {dlabel.title()} Deals on NSE ↗</a>',
+                        unsafe_allow_html=True
+                    )
+                    st.markdown(
+                        f'<a href="https://www.bseindia.com/markets/equity/EQReports/bulk_deals.aspx" '
+                        f'target="_blank" style="display:inline-block;background:#f1f5f9;'
+                        f'color:#0057b8;border:1px solid #e2e8f0;padding:7px 16px;border-radius:6px;'
+                        f'font-size:.82rem;font-weight:600;text-decoration:none;margin-left:8px;">'
+                        f'Open on BSE ↗</a>',
+                        unsafe_allow_html=True
+                    )
+                elif deal_df is not None and deal_df.empty:
+                    st.info(
+                        f"No {dlabel} deals reported yet today. "
+                        "Data updates during and after market hours (9:15 AM – 3:30 PM IST)."
+                    )
+                elif deal_df is not None:
+                    st.caption(f"{len(deal_df)} {dlabel} deal(s) today")
+                    st.dataframe(deal_df, use_container_width=True,
+                                 height=min(60+len(deal_df)*36, 480), hide_index=True)
 
-# =============================================================================
-# TAB — CORPORATE EVENTS
-# Board meetings, dividends, bonus issues, splits, rights issues from NSE.
-# Filtered to portfolio holdings where a file has been uploaded.
-# =============================================================================
-with tab_events:
-    st.markdown("#### 📆 Corporate Events")
-    st.caption("Board meetings · Dividends · Bonus · Splits · Rights — from NSE India")
+    # =========================================================================
+    # CORPORATE EVENTS
+    # =========================================================================
+    with intel_events:
+        st.markdown("##### 📆 Corporate Events")
+        st.caption("Board meetings · Dividends · Bonus · Splits · Rights — from NSE India")
 
-    @st.cache_data(ttl=3600)
-    def fetch_corporate_events(symbol=None):
-        """
-        Fetch upcoming corporate events from NSE.
-        If symbol provided, fetch for that symbol only.
-        Otherwise fetch market-wide upcoming events.
-        """
-        headers = {
-            "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-            "Accept":          "application/json, text/plain, */*",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Referer":         "https://www.nseindia.com/market-data/upcoming-corporate-actions",
-        }
-        try:
-            sess = requests.Session()
-            sess.get("https://www.nseindia.com", headers=headers, timeout=8)
-            if symbol:
-                url = f"https://www.nseindia.com/api/corporates-corporateActions?index=equities&symbol={symbol}"
-            else:
-                url = "https://www.nseindia.com/api/corporates-corporateActions?index=equities"
-            resp = sess.get(url, headers=headers, timeout=10)
-            data = resp.json()
-            records = data.get("data", data) if isinstance(data, dict) else data
-            if not isinstance(records, list):
-                return None, "Unexpected NSE response format"
-            return pd.DataFrame(records) if records else pd.DataFrame(), None
-        except Exception as e:
-            return None, str(e)
+        @st.cache_data(ttl=3600)
+        def fetch_corporate_events():
+            headers = {
+                "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                "Accept":          "application/json, text/plain, */*",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Referer":         "https://www.nseindia.com/market-data/upcoming-corporate-actions",
+            }
+            try:
+                sess = requests.Session()
+                sess.get("https://www.nseindia.com", headers=headers, timeout=8)
+                resp = sess.get(
+                    "https://www.nseindia.com/api/corporates-corporateActions?index=equities",
+                    headers=headers, timeout=10
+                )
+                data = resp.json()
+                records = data.get("data", data) if isinstance(data, dict) else data
+                if not isinstance(records, list):
+                    return None, str(data)[:200]
+                return pd.DataFrame(records) if records else pd.DataFrame(), None
+            except Exception as e:
+                return None, str(e)
 
-    ev_col1, ev_col2 = st.columns([2, 1])
-    with ev_col1:
-        ev_filter = st.selectbox(
-            "Event Type",
-            ["All", "Board Meeting", "Dividend", "Bonus", "Split", "Rights", "AGM"],
-            key="ev_filter"
-        )
-    with ev_col2:
-        portfolio_only = st.checkbox("Portfolio stocks only", value=False, key="ev_portfolio")
+        # Filter row — side-by-side aligned ──────────────────────────────────
+        ef1, ef2 = st.columns([3, 2])
+        with ef1:
+            ev_filter = st.selectbox(
+                "Event Type",
+                ["All","Board Meeting","Dividend","Bonus","Split","Rights","AGM"],
+                key="ev_filter_intel"
+            )
+        with ef2:
+            st.markdown("<div style='height:26px'></div>", unsafe_allow_html=True)
+            portfolio_only = st.checkbox(
+                "Portfolio stocks only", value=False, key="ev_portfolio_intel"
+            )
 
-    with st.spinner("Fetching corporate events from NSE…"):
-        ev_df, ev_err = fetch_corporate_events()
+        with st.spinner("Fetching corporate events…"):
+            ev_df, ev_err = fetch_corporate_events()
 
-    if ev_err:
-        st.warning(f"⚠️ {ev_err}")
-        st.markdown(
-            '<a href="https://www.nseindia.com/market-data/upcoming-corporate-actions" '
-            'target="_blank" style="color:#0057b8;">View on NSE directly ↗</a>',
-            unsafe_allow_html=True
-        )
-    elif ev_df is not None and not ev_df.empty:
-        # Normalise
-        ev_df.columns = [c.strip() for c in ev_df.columns]
+        if ev_err:
+            st.warning(f"⚠️ {ev_err}")
+            st.markdown(
+                '<a href="https://www.nseindia.com/market-data/upcoming-corporate-actions" '
+                'target="_blank" style="display:inline-block;background:#0057b8;color:#fff;'
+                'padding:7px 16px;border-radius:6px;font-size:.82rem;font-weight:600;'
+                'text-decoration:none;">View on NSE ↗</a>',
+                unsafe_allow_html=True
+            )
+        elif ev_df is not None and not ev_df.empty:
+            ev_df.columns = [c.strip() for c in ev_df.columns]
+            if ev_filter != "All":
+                purpose_col = next((c for c in ev_df.columns
+                    if any(k in c.lower() for k in ("purpose","subject","action"))), None)
+                if purpose_col:
+                    ev_df = ev_df[ev_df[purpose_col].str.upper().str.contains(
+                        ev_filter.upper(), na=False)]
+            if portfolio_only:
+                port_syms = st.session_state.get("portfolio_symbols", [])
+                if port_syms:
+                    sym_col = next((c for c in ev_df.columns
+                        if c.lower() in ("symbol","tradingsymbol")), None)
+                    if sym_col:
+                        ev_df = ev_df[ev_df[sym_col].isin(port_syms)]
+                else:
+                    st.info("Upload holdings in the Portfolio tab first to use this filter.")
+            st.caption(f"{len(ev_df)} events")
+            st.dataframe(ev_df, use_container_width=True,
+                         height=min(60+len(ev_df)*36, 600), hide_index=True)
+        else:
+            st.info("No upcoming corporate events found.")
 
-        # Filter by event type
-        if ev_filter != "All":
-            purpose_col = next((c for c in ev_df.columns
-                                if "purpose" in c.lower() or "subject" in c.lower()
-                                or "action" in c.lower()), None)
-            if purpose_col:
-                ev_df = ev_df[ev_df[purpose_col].str.upper().str.contains(
-                    ev_filter.upper(), na=False
-                )]
+    # =========================================================================
+    # WATCHLIST
+    # =========================================================================
+    with intel_watchlist:
+        st.markdown("##### 👁️ Watchlist")
+        st.caption("Track stocks you're monitoring. Press Enter or click Add.")
 
-        # Filter to portfolio stocks if requested
-        if portfolio_only:
-            portfolio_syms = st.session_state.get("portfolio_symbols", [])
-            if portfolio_syms:
-                sym_col = next((c for c in ev_df.columns
-                                if c.lower() in ("symbol","tradingsymbol")), None)
-                if sym_col:
-                    ev_df = ev_df[ev_df[sym_col].isin(portfolio_syms)]
-            else:
-                st.info("Upload your holdings file in the Portfolio tab first.")
+        if "watchlist" not in st.session_state:
+            st.session_state.watchlist = ["HDFCBANK","RELIANCE","TCS","ICICIBANK","AXISBANK"]
 
-        st.caption(f"{len(ev_df)} events found")
-        st.dataframe(ev_df, use_container_width=True,
-                     height=min(60 + len(ev_df)*36, 600), hide_index=True)
-    else:
-        st.info("No upcoming corporate events found or data is unavailable.")
+        # Add row — Enter key works via form ──────────────────────────────────
+        with st.form(key="wl_add_form", clear_on_submit=True):
+            wfa, wfb = st.columns([4, 1])
+            with wfa:
+                new_sym = st.text_input(
+                    "Add symbol", placeholder="e.g. INFY, BAJFINANCE, TITAN",
+                    label_visibility="collapsed", key="wl_form_input"
+                )
+            with wfb:
+                submitted = st.form_submit_button("➕ Add", use_container_width=True)
+            if submitted and new_sym.strip():
+                s = new_sym.strip().upper()
+                if s not in st.session_state.watchlist:
+                    st.session_state.watchlist.append(s)
+                    st.rerun()
 
-    st.markdown("---")
-    st.markdown(
-        '<div style="font-size:.72rem;color:#94a3b8;font-family:JetBrains Mono,monospace;">'
-        "📆 Data from NSE India · Refreshes every hour · "
-        "Enable 'Portfolio stocks only' after uploading holdings in the Portfolio tab"
-        "</div>", unsafe_allow_html=True
-    )
+        # Remove row ──────────────────────────────────────────────────────────
+        if st.session_state.watchlist:
+            wr1, wr2 = st.columns([4, 1])
+            with wr1:
+                to_remove = st.multiselect(
+                    "Remove", st.session_state.watchlist,
+                    key="wl_remove_multi", label_visibility="collapsed",
+                    placeholder="Select symbols to remove…"
+                )
+            with wr2:
+                if st.button("🗑️ Remove", use_container_width=True, key="wl_remove_btn"):
+                    st.session_state.watchlist = [
+                        s for s in st.session_state.watchlist if s not in to_remove
+                    ]
+                    st.rerun()
 
-
-# =============================================================================
-# TAB — WATCHLIST
-# Track stocks you're interested in but haven't bought.
-# Stores symbols in session state. Add/remove freely.
-# Shows: live price, day change, RSI, 200EMA position, 52w position.
-# =============================================================================
-with tab_watchlist:
-    st.markdown("#### 👁️ Watchlist")
-    st.caption("Track stocks you're monitoring. Data refreshes with the auto-refresh interval.")
-
-    # Session state
-    if "watchlist" not in st.session_state:
-        st.session_state.watchlist = [
-            "HDFCBANK", "RELIANCE", "TCS", "ICICIBANK", "AXISBANK"
-        ]
-
-    # Add symbol
-    wl_c1, wl_c2 = st.columns([3, 1])
-    with wl_c1:
-        new_sym = st.text_input(
-            "Add symbol", placeholder="e.g. INFY, BAJFINANCE, TITAN",
-            key="wl_add_input", label_visibility="collapsed"
-        )
-    with wl_c2:
-        if st.button("➕ Add", use_container_width=True, key="wl_add_btn"):
-            s = new_sym.strip().upper()
-            if s and s not in st.session_state.watchlist:
-                st.session_state.watchlist.append(s)
-                st.rerun()
-
-    # Remove symbols
-    if st.session_state.watchlist:
-        to_remove = st.multiselect(
-            "Remove symbols", st.session_state.watchlist, key="wl_remove",
-            label_visibility="visible"
-        )
-        if to_remove:
-            if st.button("🗑️ Remove selected", key="wl_remove_btn"):
-                st.session_state.watchlist = [
-                    s for s in st.session_state.watchlist if s not in to_remove
-                ]
-                st.rerun()
-
-    st.markdown("---")
-
-    if not st.session_state.watchlist:
-        st.info("Your watchlist is empty. Add a symbol above.")
-    else:
-        @st.cache_data(ttl=60)
-        def fetch_watchlist_data(symbols_tuple):
-            rows = []
-            for sym in symbols_tuple:
-                price, chg = fetch_ticker_snapshot(f"{sym}.NS")
-                tech = None
-                try:
-                    df_t = yf.download(f"{sym}.NS", period="1y", interval="1d",
-                                       progress=False, auto_adjust=True)
-                    if not df_t.empty and len(df_t) >= 30:
-                        close  = df_t["Close"].squeeze()
-                        high   = df_t["High"].squeeze()
-                        low    = df_t["Low"].squeeze()
-                        ema200 = float(close.ewm(span=200, adjust=False).mean().iloc[-1])
-                        ltp    = float(close.iloc[-1])
-                        d      = close.diff()
-                        g      = d.clip(lower=0).ewm(com=13, min_periods=14).mean()
-                        l      = (-d.clip(upper=0)).ewm(com=13, min_periods=14).mean()
-                        rsi    = float((100-100/(1+g/l.replace(0,0.0001))).iloc[-1])
-                        w52h   = float(high.tail(252).max())
-                        w52l   = float(low.tail(252).min())
-                        w52p   = (ltp-w52l)/(w52h-w52l)*100 if w52h != w52l else 50
-                        tech   = {
-                            "rsi": round(rsi,1),
-                            "above_200": ltp > ema200,
-                            "ema200": round(ema200,2),
-                            "w52_pos": round(w52p,1),
-                        }
-                except Exception:
-                    pass
-                rows.append({
-                    "Symbol":    sym,
-                    "Price":     round(price,2) if price else None,
-                    "Day %":     round(chg,2)   if chg   else None,
-                    "RSI":       tech["rsi"]       if tech else None,
-                    "vs 200EMA": ("Above" if tech["above_200"] else "Below") if tech else None,
-                    "52w Pos %": tech["w52_pos"]   if tech else None,
-                })
-            return rows
-
-        with st.spinner(f"Loading data for {len(st.session_state.watchlist)} symbols…"):
-            wl_rows = fetch_watchlist_data(tuple(st.session_state.watchlist))
-
-        wl_df = pd.DataFrame(wl_rows)
-
-        def _wl_chg_color(val):
-            if isinstance(val, float):
-                if val > 0:  return "color:#16a34a;font-weight:600"
-                if val < 0:  return "color:#dc2626;font-weight:600"
-            return ""
-        def _wl_ema_color(val):
-            if val == "Above": return "color:#16a34a;font-weight:600"
-            if val == "Below": return "color:#dc2626;font-weight:600"
-            return ""
-        def _wl_rsi_color(val):
-            if isinstance(val, float):
-                if val > 70: return "color:#dc2626"
-                if val < 30: return "color:#16a34a"
-            return ""
-
-        styled_wl = (
-            wl_df.style
-            .applymap(_wl_chg_color,  subset=["Day %"])
-            .applymap(_wl_ema_color,  subset=["vs 200EMA"])
-            .applymap(_wl_rsi_color,  subset=["RSI"])
-            .format({
-                "Price":    "₹{:,.2f}",
-                "Day %":    "{:+.2f}%",
-                "RSI":      "{:.1f}",
-                "52w Pos %":"{:.1f}%",
-            }, na_rep="—")
-        )
-        st.dataframe(styled_wl, use_container_width=True,
-                     height=min(60 + len(wl_df)*36, 560), hide_index=True)
-
-        st.caption(f"{len(st.session_state.watchlist)} stocks · Prices via yfinance · Refreshes every 60 sec")
-
-        # ── Quick chart for selected symbol ──────────────────────────────────
         st.markdown("---")
-        st.markdown("##### Quick Chart")
-        wl_chart_sym = st.selectbox(
-            "Chart symbol", st.session_state.watchlist, key="wl_chart_sym"
-        )
-        if wl_chart_sym:
-            import urllib.parse as _wlup
-            _wl_params = _wlup.urlencode({
-                "frameElementId": "wl_tv_chart",
-                "symbol":         wl_chart_sym,
-                "interval":       "D",
-                "timezone":       "Asia/Kolkata",
-                "theme":          "light",
-                "style":          "1",
-                "locale":         "en",
-                "toolbar_bg":     "f8f9fb",
-                "hide_side_toolbar": "0",
-                "allow_symbol_change": "1",
-                "withdateranges": "1",
-            })
-            wl_chart_html = f'''<!DOCTYPE html><html><head><meta charset="utf-8">
-<style>html,body{{margin:0;padding:0;background:#fff;}}
-iframe{{border:none;border-radius:8px;display:block;}}</style></head>
-<body><iframe id="wl_tv_chart"
-  src="https://s.tradingview.com/widgetembed/?{_wl_params}"
-  width="100%" height="390" frameborder="0" scrolling="no"
-  allowtransparency="true" allowfullscreen></iframe>
-</body></html>'''
-            st.components.v1.html(wl_chart_html, height=400)
 
-    st.markdown(
-        '<div style="font-size:.72rem;color:#94a3b8;font-family:JetBrains Mono,monospace;">'
-        "👁️ Watchlist stored in browser session · Prices via yfinance (15min delay) · "
-        "Add any NSE ticker without .NS suffix"
-        "</div>", unsafe_allow_html=True
-    )
+        if not st.session_state.watchlist:
+            st.info("Watchlist is empty. Add a symbol above.")
+        else:
+            @st.cache_data(ttl=60)
+            def fetch_watchlist_data(symbols_tuple):
+                rows = []
+                for sym in symbols_tuple:
+                    price, chg = fetch_ticker_snapshot(f"{sym}.NS")
+                    tech = None
+                    try:
+                        df_t = yf.download(f"{sym}.NS", period="1y", interval="1d",
+                                           progress=False, auto_adjust=True)
+                        if not df_t.empty and len(df_t) >= 30:
+                            close  = df_t["Close"].squeeze()
+                            high   = df_t["High"].squeeze()
+                            low    = df_t["Low"].squeeze()
+                            ema200 = float(close.ewm(span=200,adjust=False).mean().iloc[-1])
+                            ltp    = float(close.iloc[-1])
+                            d_     = close.diff()
+                            g_     = d_.clip(lower=0).ewm(com=13,min_periods=14).mean()
+                            l_     = (-d_.clip(upper=0)).ewm(com=13,min_periods=14).mean()
+                            rsi    = float((100-100/(1+g_/l_.replace(0,0.0001))).iloc[-1])
+                            w52h   = float(high.tail(252).max())
+                            w52l   = float(low.tail(252).min())
+                            w52p   = (ltp-w52l)/(w52h-w52l)*100 if w52h!=w52l else 50
+                            tech   = {"rsi":round(rsi,1),"above_200":ltp>ema200,
+                                      "ema200":round(ema200,2),"w52_pos":round(w52p,1)}
+                    except Exception:
+                        pass
+                    rows.append({
+                        "Symbol":    sym,
+                        "Price":     round(price,2)         if price else None,
+                        "Day %":     round(chg,2)           if chg   else None,
+                        "RSI":       tech["rsi"]            if tech  else None,
+                        "vs 200EMA": ("Above" if tech["above_200"] else "Below") if tech else None,
+                        "52w Pos %": tech["w52_pos"]        if tech  else None,
+                    })
+                return rows
+
+            with st.spinner(f"Loading {len(st.session_state.watchlist)} symbols…"):
+                wl_rows = fetch_watchlist_data(tuple(st.session_state.watchlist))
+
+            wl_df = pd.DataFrame(wl_rows)
+
+            def _wl_chg(v):
+                if isinstance(v,float): return "color:#16a34a;font-weight:600" if v>0 else "color:#dc2626;font-weight:600" if v<0 else ""
+                return ""
+            def _wl_ema(v):
+                if v=="Above": return "color:#16a34a;font-weight:600"
+                if v=="Below": return "color:#dc2626;font-weight:600"
+                return ""
+            def _wl_rsi(v):
+                if isinstance(v,float):
+                    if v>70: return "color:#dc2626"
+                    if v<30: return "color:#16a34a"
+                return ""
+
+            st.dataframe(
+                wl_df.style
+                    .applymap(_wl_chg, subset=["Day %"])
+                    .applymap(_wl_ema, subset=["vs 200EMA"])
+                    .applymap(_wl_rsi, subset=["RSI"])
+                    .format({"Price":"₹{:,.2f}","Day %":"{:+.2f}%",
+                             "RSI":"{:.1f}","52w Pos %":"{:.1f}%"}, na_rep="—"),
+                use_container_width=True,
+                height=min(60+len(wl_df)*36, 520), hide_index=True
+            )
+
+            # Quick chart ─────────────────────────────────────────────────────
+            st.markdown("---")
+            wl_chart_sym = st.selectbox("Quick chart", st.session_state.watchlist, key="wl_chart")
+            if wl_chart_sym:
+                import urllib.parse as _wlup
+                _wl_p = _wlup.urlencode({
+                    "frameElementId":"wl_tv","symbol":wl_chart_sym,
+                    "interval":"D","timezone":"Asia/Kolkata","theme":"light",
+                    "style":"1","locale":"en","toolbar_bg":"f8f9fb",
+                    "hide_side_toolbar":"0","allow_symbol_change":"1","withdateranges":"1",
+                })
+                st.components.v1.html(
+                    f'<!DOCTYPE html><html><head><meta charset="utf-8">'
+                    f'<style>html,body{{margin:0;padding:0;background:#fff;}}'
+                    f'iframe{{border:none;border-radius:8px;display:block;}}</style></head>'
+                    f'<body><iframe id="wl_tv" src="https://s.tradingview.com/widgetembed/?{_wl_p}"'
+                    f' width="100%" height="390" frameborder="0" scrolling="no"'
+                    f' allowtransparency="true" allowfullscreen></iframe></body></html>',
+                    height=400
+                )
 
 
-# =============================================================================
 # FOOTER
 # =============================================================================
 st.markdown("---")
