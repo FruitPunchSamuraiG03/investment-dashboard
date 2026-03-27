@@ -1,5 +1,5 @@
 # =============================================================================
-# TERMINAL — Quant Screener (Full Institutional Engine)
+# TERMINAL — Quant Screener (Full Institutional Engine + Analytics)
 # =============================================================================
 
 import streamlit as st
@@ -60,7 +60,6 @@ def safe_float(v):
 # CACHE & UNIVERSE LOGIC
 # =============================================================================
 @st.cache_data(ttl=3600)
-@st.cache_data(ttl=3600)
 def fetch_index_universe(name):
     urls = {
         "nifty500": [
@@ -76,24 +75,18 @@ def fetch_index_universe(name):
     }
     session = requests.Session()
     session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
-    
     for url in urls.get(name, []):
         try:
             r = session.get(url, timeout=10)
             if r.status_code == 200:
-                # Tell Pandas to forcefully ignore the NSE's broken trailing commas
                 try:
                     df = pd.read_csv(StringIO(r.text))
                 except:
                     df = pd.read_csv(StringIO(r.text), on_bad_lines='skip')
-                
                 df.columns = df.columns.str.strip()
                 if "Symbol" in df.columns:
                     return df[df["Symbol"].notna() & (df["Symbol"].str.strip() != "")]
-        except: 
-            continue
-            
-    return pd.DataFrame(columns=["Symbol","Industry"])
+        except: continue
     return pd.DataFrame(columns=["Symbol","Industry"])
 
 def load_cache(symbol):
@@ -114,7 +107,7 @@ def save_cache(symbol, data):
     except: pass
 
 # =============================================================================
-# PIOTROSKI F-SCORE
+# PIOTROSKI F-SCORE & FINANCIAL DATA
 # =============================================================================
 def compute_piotroski(inc, bs, cf):
     score = 0; details = []
@@ -152,9 +145,6 @@ def compute_piotroski(inc, bs, cf):
     except Exception: pass
     return score, " | ".join(details)
 
-# =============================================================================
-# DATA FETCHING (Full Fundamentals)
-# =============================================================================
 def _get_item(stmt, keys, yr=0):
     if stmt is None: return np.nan
     for k in keys:
@@ -277,13 +267,7 @@ def apply_hard_gates(row):
         
     return (False, "; ".join(reasons)) if reasons else (True, "")
 
-VALUATION_BANDS = {
-    "pe_ttm": [(10,10),(15,8),(20,6),(25,4),(30,2),(1e9,0)],
-    "pb": [(1,10),(2,8),(3,6),(4,4),(5,2),(1e9,0)],
-    "ps": [(0.5,10),(1,8),(2,6),(3,4),(5,2),(1e9,0)],
-    "ev_ebitda": [(6,10),(9,8),(12,6),(15,4),(20,2),(1e9,0)],
-    "peg": [(0.5,10),(1,8),(1.5,6),(2,4),(3,2),(1e9,0)],
-}
+VALUATION_BANDS = {"pe_ttm": [(10,10),(15,8),(20,6),(25,4),(30,2),(1e9,0)], "pb": [(1,10),(2,8),(3,6),(4,4),(5,2),(1e9,0)], "ps": [(0.5,10),(1,8),(2,6),(3,4),(5,2),(1e9,0)], "ev_ebitda": [(6,10),(9,8),(12,6),(15,4),(20,2),(1e9,0)], "peg": [(0.5,10),(1,8),(1.5,6),(2,4),(3,2),(1e9,0)]}
 
 def score_tiered(v, bands):
     v = safe_float(v)
@@ -291,7 +275,6 @@ def score_tiered(v, bands):
     for upper, sc in bands:
         if v <= upper: return sc
     return 0
-
 def score_hi(v, lo, mid, hi):
     v = safe_float(v)
     if np.isnan(v): return np.nan
@@ -299,7 +282,6 @@ def score_hi(v, lo, mid, hi):
     if v >= mid: return 7
     if v >= lo: return 4
     return 1
-
 def score_lo(v, good, mid, bad):
     v = safe_float(v)
     if np.isnan(v): return np.nan
@@ -396,10 +378,10 @@ def compute_scores(row, sm_dict):
     return s
 
 # =============================================================================
-# PORTFOLIO CONSTRUCTION
+# PORTFOLIO CONSTRUCTION & ANALYTICS
 # =============================================================================
 def build_portfolio(df_scored, n, method, pval):
-    if "yf_symbol" not in df_scored.columns: return None, None, None
+    if "yf_symbol" not in df_scored.columns: return None, None, None, None
     top_n = df_scored.dropna(subset=["yf_symbol"]).head(n).copy().reset_index(drop=True)
     yf_symbols = top_n["yf_symbol"].tolist()
     
@@ -414,10 +396,10 @@ def build_portfolio(df_scored, n, method, pval):
         returns = prices.pct_change().dropna()
     except Exception as e:
         st.error(f"Price Download Error: {e}")
-        return None, None, None
+        return None, None, None, None
         
     top_n_avail = top_n[top_n["yf_symbol"].isin(prices.columns)].copy()
-    if len(top_n_avail) < 5: return None, None, None
+    if len(top_n_avail) < 5: return None, None, None, None
     
     sym_list = top_n_avail["yf_symbol"].tolist()
     vol = returns[sym_list].std() * np.sqrt(252)
@@ -481,8 +463,6 @@ def build_portfolio(df_scored, n, method, pval):
     port_ret = (returns[list(weights.index)] * weights).sum(axis=1)
     ann_ret = float((1 + port_ret).prod() ** (252/len(port_ret)) - 1)
     ann_vol = float(port_ret.std() * np.sqrt(252))
-    
-    # Calculate Max Drawdown
     cumret = (1 + port_ret).cumprod()
     mdd = float(((cumret / cumret.cummax()) - 1).min())
     
@@ -497,7 +477,29 @@ def build_portfolio(df_scored, n, method, pval):
         "Avg Piotroski F-Score": w_avg("piotroski_score")
     }
 
-    port_cols = ["symbol","company_name","sector","composite_score","momentum_12m","piotroski_score","pe_ttm","pb","roe","roic","fcf_yield","beta","yf_symbol", "current_price"]
+    # Data generation for Charts
+    corr_matrix = returns[list(weights.index)].corr().fillna(0)
+    
+    factors = ["capital_efficiency", "valuation", "growth_quality", "cashflow_quality", "dupont_health", "balance_sheet"]
+    factor_scores = {f: (w_avg(f) if not np.isnan(w_avg(f)) else 0) for f in factors}
+    
+    stock_rr = []
+    for sym in weights.index:
+        s_ret = returns[sym].dropna()
+        if len(s_ret) > 0:
+            a_ret = (1 + s_ret).prod() ** (252 / len(s_ret)) - 1
+            a_vol = s_ret.std() * np.sqrt(252)
+            stock_rr.append({"symbol": sym, "return": a_ret, "volatility": a_vol, "weight": weights[sym]})
+    df_rr = pd.DataFrame(stock_rr).dropna()
+
+    chart_data = {
+        "corr_matrix": corr_matrix,
+        "factor_scores": factor_scores,
+        "df_rr": df_rr,
+        "cum_returns": cumret
+    }
+
+    port_cols = ["symbol","company_name","sector","composite_score","momentum_12m","piotroski_score","pe_ttm","pb","roe","roic","fcf_yield","beta","capital_efficiency","valuation","growth_quality","cashflow_quality","dupont_health","balance_sheet","yf_symbol","current_price"]
     avail_cols = [c for c in port_cols if c in top_n_avail.columns]
     port_df = top_n_avail[avail_cols].copy()
     port_df["weight_pct"] = port_df["yf_symbol"].map(weights) * 100
@@ -513,7 +515,7 @@ def build_portfolio(df_scored, n, method, pval):
             return max(1, int(ai / cp))
         port_df["shares_to_buy"] = port_df.apply(calc_shares, axis=1)
         
-    return port_df, analytics, sec_wts
+    return port_df, analytics, sec_wts, chart_data
 
 # =============================================================================
 # EXCEL EXPORT (Memory Buffer)
@@ -648,7 +650,7 @@ if st.session_state.get("screener_run"):
     status_box.info("⚖️ Optimizing Portfolio Weights (Matrix Math)...")
     method_map = {"Score-Weighted": 1, "Inverse Volatility": 2, "Score / Volatility": 3, "Maximum Sharpe Ratio": 4, "Hierarchical Risk Parity": 5}
     
-    port_df, analytics, sec_wts = build_portfolio(df_scored, n_stocks, method_map[wt_method], pval)
+    port_df, analytics, sec_wts, chart_data = build_portfolio(df_scored, n_stocks, method_map[wt_method], pval)
     
     status_box.empty()
     
@@ -683,25 +685,14 @@ if st.session_state.get("screener_run"):
                 labels = list(sec_wts.keys())
                 values = [v * 100 for v in sec_wts.values()]
                 
-                fig = go.Figure(data=[go.Pie(
-                    labels=labels, 
-                    values=values, 
-                    hole=0.45,
-                    textposition='inside',
-                    textinfo='percent',
-                    hoverinfo='label+percent',
-                    marker=dict(line=dict(color='#ffffff', width=2))
+                fig_pie = go.Figure(data=[go.Pie(
+                    labels=labels, values=values, hole=0.45, textposition='inside', textinfo='percent', hoverinfo='label+percent', marker=dict(line=dict(color='#ffffff', width=2))
                 )])
-                
-                fig.update_layout(
-                    showlegend=True,
-                    legend=dict(orientation="h", yanchor="top", y=-0.1, xanchor="center", x=0.5, font=dict(size=10)),
-                    margin=dict(t=10, b=10, l=10, r=10),
-                    height=350,
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)'
+                fig_pie.update_layout(
+                    showlegend=True, legend=dict(orientation="h", yanchor="top", y=-0.1, xanchor="center", x=0.5, font=dict(size=10)),
+                    margin=dict(t=10, b=10, l=10, r=10), height=350, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig_pie, use_container_width=True)
 
             with col_table:
                 st.markdown("<div style='font-family: JetBrains Mono; font-size: 0.8rem; font-weight: 600; color: #64748b; margin-bottom: 10px;'>PORTFOLIO HOLDINGS</div>", unsafe_allow_html=True)
@@ -716,8 +707,45 @@ if st.session_state.get("screener_run"):
                     use_container_width=True, hide_index=True, height=400
                 )
             
+            st.markdown("<hr style='margin: 20px 0;'>", unsafe_allow_html=True)
+            st.markdown("<div style='font-family: JetBrains Mono; font-size: 1rem; font-weight: 700; color: #1e293b; margin-bottom: 15px;'>📈 ADVANCED PORTFOLIO VISUALISATIONS</div>", unsafe_allow_html=True)
+            
+            # ROW 4: Backtest & Radar Chart
+            vcol1, vcol2 = st.columns(2)
+            with vcol1:
+                fig_backtest = go.Figure()
+                fig_backtest.add_trace(go.Scatter(x=chart_data["cum_returns"].index, y=chart_data["cum_returns"].values, mode='lines', name='Portfolio', line=dict(color='#0057b8', width=2)))
+                fig_backtest.update_layout(title="Historical 2Y Backtest (Base 1.0)", margin=dict(l=20,r=20,t=40,b=20), height=350, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(family="Inter", size=11))
+                st.plotly_chart(fig_backtest, use_container_width=True)
+
+            with vcol2:
+                f_labels = [f.replace("_", " ").title() for f in chart_data["factor_scores"].keys()]
+                f_vals = list(chart_data["factor_scores"].values())
+                fig_radar = go.Figure(data=go.Scatterpolar(r=f_vals + [f_vals[0]], theta=f_labels + [f_labels[0]], fill='toself', marker=dict(color='#16a34a')))
+                fig_radar.update_layout(title="Factor Exposure DNA", polar=dict(radialaxis=dict(visible=True, range=[0, 10])), showlegend=False, margin=dict(l=40,r=40,t=40,b=20), height=350, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(family="Inter", size=11))
+                st.plotly_chart(fig_radar, use_container_width=True)
+                
+            # ROW 5: Scatter & Heatmap
+            vcol3, vcol4 = st.columns(2)
+            with vcol3:
+                df_rr = chart_data["df_rr"]
+                max_wt = df_rr["weight"].max() if not df_rr.empty else 0.05
+                sizeref = 2.0 * max_wt / (40.**2) 
+                fig_scatter = go.Figure(data=go.Scatter(
+                    x=df_rr["volatility"]*100, y=df_rr["return"]*100, mode='markers', text=df_rr["symbol"], hovertemplate="<b>%{text}</b><br>Return: %{y:.2f}%<br>Volatility: %{x:.2f}%<extra></extra>",
+                    marker=dict(size=df_rr["weight"], sizemode='area', sizeref=sizeref, sizemin=4, color=df_rr["return"], colorscale='RdYlGn', showscale=True, colorbar=dict(title="Ret %"))
+                ))
+                fig_scatter.update_layout(title="Risk vs. Reward (Bubble Size = Weight)", xaxis_title="Annualized Volatility (%)", yaxis_title="Annualized Return (%)", margin=dict(l=20,r=20,t=40,b=20), height=400, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(family="Inter", size=11))
+                st.plotly_chart(fig_scatter, use_container_width=True)
+                
+            with vcol4:
+                corr = chart_data["corr_matrix"]
+                fig_corr = go.Figure(data=go.Heatmap(z=corr.values, x=corr.columns, y=corr.index, colorscale='RdBu', zmin=-1, zmax=1))
+                fig_corr.update_layout(title="Asset Correlation Heatmap", margin=dict(l=20,r=20,t=40,b=20), height=400, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(family="Inter", size=11))
+                st.plotly_chart(fig_corr, use_container_width=True)
+
             # Generate Excel Button
-            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("<br><hr style='margin: 20px 0;'>", unsafe_allow_html=True)
             excel_data = create_excel_buffer(df_scored, df_gated, failed, port_df, analytics)
             st.download_button(
                 label="📥 Download Full Excel Report",
