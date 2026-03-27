@@ -2,6 +2,7 @@
 # TERMINAL — Quant Screener (Full Institutional Engine)
 # =============================================================================
 
+plotly.graph_objects
 import streamlit as st
 import pandas as pd
 import numpy as np
