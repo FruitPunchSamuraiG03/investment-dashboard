@@ -11,4 +11,4 @@ requests>=2.28.0
 streamlit-autorefresh>=0.0.1
 openpyxl>=3.1.0
 matplotlib>=3.7.0
-
+PyPortfolioOpt>=1.5.0
