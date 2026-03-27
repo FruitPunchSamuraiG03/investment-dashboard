@@ -2,7 +2,6 @@
 # TERMINAL — Quant Screener (Full Institutional Engine)
 # =============================================================================
 
-plotly.graph_objects
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -10,6 +9,7 @@ import yfinance as yf
 import requests
 import os
 import json
+import plotly.graph_objects as go
 from io import StringIO, BytesIO
 from datetime import datetime, timedelta
 from openpyxl import Workbook
@@ -381,7 +381,7 @@ def compute_scores(row, sm_dict):
 # PORTFOLIO CONSTRUCTION
 # =============================================================================
 def build_portfolio(df_scored, n, method, pval):
-    if "yf_symbol" not in df_scored.columns: return None, None
+    if "yf_symbol" not in df_scored.columns: return None, None, None
     top_n = df_scored.dropna(subset=["yf_symbol"]).head(n).copy().reset_index(drop=True)
     yf_symbols = top_n["yf_symbol"].tolist()
     
@@ -396,10 +396,10 @@ def build_portfolio(df_scored, n, method, pval):
         returns = prices.pct_change().dropna()
     except Exception as e:
         st.error(f"Price Download Error: {e}")
-        return None, None
+        return None, None, None
         
     top_n_avail = top_n[top_n["yf_symbol"].isin(prices.columns)].copy()
-    if len(top_n_avail) < 5: return None, None
+    if len(top_n_avail) < 5: return None, None, None
     
     sym_list = top_n_avail["yf_symbol"].tolist()
     vol = returns[sym_list].std() * np.sqrt(252)
@@ -464,16 +464,22 @@ def build_portfolio(df_scored, n, method, pval):
     ann_ret = float((1 + port_ret).prod() ** (252/len(port_ret)) - 1)
     ann_vol = float(port_ret.std() * np.sqrt(252))
     
+    # Calculate Max Drawdown
+    cumret = (1 + port_ret).cumprod()
+    mdd = float(((cumret / cumret.cummax()) - 1).min())
+    
     analytics = {
         "Annualised Return": f"{ann_ret*100:.2f}%", 
         "Annualised Volatility": f"{ann_vol*100:.2f}%",
         "Sharpe Ratio": f"{(ann_ret - CONFIG['risk_free_rate']) / ann_vol:.2f}" if ann_vol > 0 else "N/A",
+        "Max Drawdown": f"{mdd*100:.2f}%",
+        "Weighted Beta": w_avg("beta"),
         "Weighted P/E": w_avg("pe_ttm"),
-        "Weighted ROIC (%)": w_avg("roic"),
+        "Weighted P/B": w_avg("pb"),
         "Avg Piotroski F-Score": w_avg("piotroski_score")
     }
 
-    port_cols = ["symbol","company_name","sector","composite_score","momentum_12m","piotroski_score","pe_ttm","roe","roic","fcf_yield","yf_symbol", "current_price"]
+    port_cols = ["symbol","company_name","sector","composite_score","momentum_12m","piotroski_score","pe_ttm","pb","roe","roic","fcf_yield","beta","yf_symbol", "current_price"]
     avail_cols = [c for c in port_cols if c in top_n_avail.columns]
     port_df = top_n_avail[avail_cols].copy()
     port_df["weight_pct"] = port_df["yf_symbol"].map(weights) * 100
@@ -489,7 +495,7 @@ def build_portfolio(df_scored, n, method, pval):
             return max(1, int(ai / cp))
         port_df["shares_to_buy"] = port_df.apply(calc_shares, axis=1)
         
-    return port_df, analytics
+    return port_df, analytics, sec_wts
 
 # =============================================================================
 # EXCEL EXPORT (Memory Buffer)
@@ -604,21 +610,17 @@ if st.session_state.get("screener_run"):
     gate_res = df_all.apply(apply_hard_gates, axis=1)
     df_all["passes_gate"] = gate_res.apply(lambda x: x[0])
     df_all["gate_reason"] = gate_res.apply(lambda x: x[1])
-
+    
     df_passed = df_all[df_all["passes_gate"]].copy().reset_index(drop=True)
     df_gated  = df_all[~df_all["passes_gate"]].copy().reset_index(drop=True)
     
     status_box.info(f"🛡️ Passed Gates: {len(df_passed)} | Eliminated: {len(df_gated)}. Computing Sector Medians...")
     
-    # --- ADD THIS NEW SAFETY CHECK HERE ---
     if df_passed.empty:
         status_box.empty()
-        st.error("⚠️ Zero stocks passed the Hard Gates! Try increasing your universe or checking Yahoo Finance data.")
+        st.error("⚠️ Zero stocks passed the Hard Gates! All analyzed stocks had excessive debt, negative margins, or missing Yahoo Finance data.")
         st.stop()
-    # --------------------------------------
-    
-    sector_medians = compute_sector_medians(df_passed)
-    
+        
     sector_medians = compute_sector_medians(df_passed)
     score_rows = df_passed.apply(lambda row: compute_scores(row.to_dict(), sector_medians), axis=1)
     df_scored  = pd.concat([df_passed, pd.DataFrame(score_rows.tolist())], axis=1)
@@ -627,7 +629,8 @@ if st.session_state.get("screener_run"):
     
     status_box.info("⚖️ Optimizing Portfolio Weights (Matrix Math)...")
     method_map = {"Score-Weighted": 1, "Inverse Volatility": 2, "Score / Volatility": 3, "Maximum Sharpe Ratio": 4, "Hierarchical Risk Parity": 5}
-    port_df, analytics = build_portfolio(df_scored, n_stocks, method_map[wt_method], pval)
+    
+    port_df, analytics, sec_wts = build_portfolio(df_scored, n_stocks, method_map[wt_method], pval)
     
     status_box.empty()
     
@@ -636,25 +639,67 @@ if st.session_state.get("screener_run"):
     
     with tab_port:
         if port_df is not None:
+            # ROW 1: Risk & Return Metrics
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Expected Annual Return", analytics["Annualised Return"])
             c2.metric("Portfolio Volatility", analytics["Annualised Volatility"])
             c3.metric("Est. Sharpe Ratio", analytics["Sharpe Ratio"])
-            c4.metric("Avg Piotroski F-Score", analytics.get("Avg Piotroski F-Score", "N/A"))
+            c4.metric("Max Drawdown", analytics["Max Drawdown"])
             
-            st.markdown("<br>", unsafe_allow_html=True)
-            show_cols = ["rank", "symbol", "sector", "weight_pct"]
-            if "shares_to_buy" in port_df.columns: show_cols += ["alloc_inr", "shares_to_buy"]
-            show_cols += ["composite_score", "piotroski_score", "pe_ttm", "roic"]
+            # ROW 2: Fundamental Aggregates
+            st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+            c5, c6, c7, c8 = st.columns(4)
+            c5.metric("Weighted Beta", f"{analytics['Weighted Beta']:.2f}" if not np.isnan(analytics['Weighted Beta']) else "N/A")
+            c6.metric("Weighted P/E", f"{analytics['Weighted P/E']:.1f}x" if not np.isnan(analytics['Weighted P/E']) else "N/A")
+            c7.metric("Weighted P/B", f"{analytics['Weighted P/B']:.1f}x" if not np.isnan(analytics['Weighted P/B']) else "N/A")
+            c8.metric("Avg Piotroski F-Score", f"{analytics['Avg Piotroski F-Score']:.1f}" if not np.isnan(analytics['Avg Piotroski F-Score']) else "N/A")
             
-            st.dataframe(
-                port_df[show_cols].style
-                .format({"weight_pct": "{:.2f}%", "alloc_inr": "₹{:,.0f}", "composite_score": "{:.1f}", "pe_ttm": "{:.1f}", "roic": "{:.1f}%"})
-                .background_gradient(subset=["weight_pct"], cmap="Blues"),
-                use_container_width=True, hide_index=True
-            )
+            st.markdown("<hr style='margin: 20px 0;'>", unsafe_allow_html=True)
+            
+            # ROW 3: Sector Chart & Holdings Table
+            col_chart, col_table = st.columns([1.2, 2.5])
+            
+            with col_chart:
+                st.markdown("<div style='font-family: JetBrains Mono; font-size: 0.8rem; font-weight: 600; color: #64748b; margin-bottom: 10px;'>SECTOR CONCENTRATION</div>", unsafe_allow_html=True)
+                
+                labels = list(sec_wts.keys())
+                values = [v * 100 for v in sec_wts.values()]
+                
+                fig = go.Figure(data=[go.Pie(
+                    labels=labels, 
+                    values=values, 
+                    hole=0.45,
+                    textposition='inside',
+                    textinfo='percent',
+                    hoverinfo='label+percent',
+                    marker=dict(line=dict(color='#ffffff', width=2))
+                )])
+                
+                fig.update_layout(
+                    showlegend=True,
+                    legend=dict(orientation="h", yanchor="top", y=-0.1, xanchor="center", x=0.5, font=dict(size=10)),
+                    margin=dict(t=10, b=10, l=10, r=10),
+                    height=350,
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)'
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+            with col_table:
+                st.markdown("<div style='font-family: JetBrains Mono; font-size: 0.8rem; font-weight: 600; color: #64748b; margin-bottom: 10px;'>PORTFOLIO HOLDINGS</div>", unsafe_allow_html=True)
+                show_cols = ["rank", "symbol", "weight_pct"]
+                if "shares_to_buy" in port_df.columns: show_cols += ["alloc_inr", "shares_to_buy"]
+                show_cols += ["composite_score", "pe_ttm", "beta"]
+                
+                st.dataframe(
+                    port_df[show_cols].style
+                    .format({"weight_pct": "{:.2f}%", "alloc_inr": "₹{:,.0f}", "composite_score": "{:.1f}", "pe_ttm": "{:.1f}", "beta": "{:.2f}"})
+                    .background_gradient(subset=["weight_pct"], cmap="Blues"),
+                    use_container_width=True, hide_index=True, height=400
+                )
             
             # Generate Excel Button
+            st.markdown("<br>", unsafe_allow_html=True)
             excel_data = create_excel_buffer(df_scored, df_gated, failed, port_df, analytics)
             st.download_button(
                 label="📥 Download Full Excel Report",
