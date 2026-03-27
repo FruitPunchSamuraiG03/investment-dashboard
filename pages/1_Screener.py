@@ -32,7 +32,7 @@ st.markdown("""
     [data-testid="stMetricLabel"] { font-size: 0.68rem !important; color: #64748b !important; text-transform: uppercase; letter-spacing: 0.08em; }
     [data-testid="stMetricValue"] { font-family: 'JetBrains Mono', monospace !important; font-size: 1.15rem !important; color: #0f172a !important; }
     .stDataFrame { border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-    .viz-title { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; font-weight: 600; color: #475569; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em;}
+    .viz-title { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; font-weight: 600; color: #475569; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -71,14 +71,12 @@ def fetch_index_universe(name):
     }
     
     session = requests.Session()
-    # Mimic a real browser to bypass NSE firewall
     session.headers.update({
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9"
     })
     
-    # Hit the NSE homepage first to generate valid cookies
     try: session.get("https://www.nseindia.com", timeout=5)
     except: pass
 
@@ -86,7 +84,10 @@ def fetch_index_universe(name):
         try:
             r = session.get(url, timeout=10)
             if r.status_code == 200 and "Symbol" in r.text:
-                df = pd.read_csv(StringIO(r.text), on_bad_lines='skip')
+                try:
+                    df = pd.read_csv(StringIO(r.text))
+                except:
+                    df = pd.read_csv(StringIO(r.text), on_bad_lines='skip')
                 df.columns = df.columns.str.strip()
                 if "Symbol" in df.columns:
                     return df[df["Symbol"].notna() & (df["Symbol"].str.strip() != "")]
@@ -453,7 +454,28 @@ def build_portfolio(df_scored, n, method, pval):
         w = weights[mask] / weights[mask].sum()
         return round(float((vals[mask] * w).sum()), 2)
 
+    # ── Calculate Portfolio Base Returns ──
     port_ret = (returns[list(weights.index)] * weights).sum(axis=1)
+    
+    # ── Download and Align Benchmarks (Nifty 50 and Nifty 500) ──
+    bench_cumret = pd.DataFrame()
+    try:
+        bench_raw = yf.download(["^NSEI", "^CRSLDX"], period=CONFIG["price_history"], progress=False)
+        if isinstance(bench_raw.columns, pd.MultiIndex):
+            bench_prices = bench_raw.xs('Close', level=0, axis=1) if 'Close' in bench_raw.columns.levels[0] else bench_raw
+        else:
+            bench_prices = bench_raw[['Close']] if 'Close' in bench_raw.columns else bench_raw
+            
+        bench_ret = bench_prices.pct_change().dropna()
+        common_idx = port_ret.index.intersection(bench_ret.index)
+        port_ret = port_ret.loc[common_idx]
+        bench_ret = bench_ret.loc[common_idx]
+        bench_cumret = (1 + bench_ret).cumprod()
+        bench_cumret.rename(columns={"^NSEI": "Nifty 50", "^CRSLDX": "Nifty 500"}, inplace=True, errors="ignore")
+    except Exception:
+        pass 
+
+    # ── Finalize Calculations ──
     ann_ret = float((1 + port_ret).prod() ** (252/len(port_ret)) - 1)
     ann_vol = float(port_ret.std() * np.sqrt(252))
     cumret = (1 + port_ret).cumprod()
@@ -489,7 +511,8 @@ def build_portfolio(df_scored, n, method, pval):
         "corr_matrix": corr_matrix,
         "factor_scores": factor_scores,
         "df_rr": df_rr,
-        "cum_returns": cumret
+        "cum_returns": cumret,
+        "bench_cumret": bench_cumret
     }
 
     port_cols = ["symbol","company_name","sector","composite_score","momentum_12m","piotroski_score","pe_ttm","pb","roe","roic","fcf_yield","beta","capital_efficiency","valuation","growth_quality","cashflow_quality","dupont_health","balance_sheet","yf_symbol","current_price"]
@@ -658,7 +681,7 @@ if st.session_state.get("screener_run"):
     
     with tab_port:
         if port_df is not None:
-            # ROW 1: Risk & Return Metrics
+            # ── ROW 1: Risk & Return Metrics ──
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Expected Annual Return", analytics["Annualised Return"])
             c2.metric("Portfolio Volatility", analytics["Annualised Volatility"])
@@ -667,7 +690,7 @@ if st.session_state.get("screener_run"):
             
             st.markdown("<br>", unsafe_allow_html=True)
             
-            # ROW 2: Fundamental Aggregates
+            # ── ROW 2: Fundamental Aggregates ──
             c5, c6, c7, c8 = st.columns(4)
             c5.metric("Weighted Beta", f"{analytics['Weighted Beta']:.2f}" if not np.isnan(analytics['Weighted Beta']) else "N/A")
             c6.metric("Weighted P/E", f"{analytics['Weighted P/E']:.1f}x" if not np.isnan(analytics['Weighted P/E']) else "N/A")
@@ -676,89 +699,131 @@ if st.session_state.get("screener_run"):
             
             st.divider()
             
-            # ROW 3: Sector Chart & Holdings Table
-            col_table, col_chart = st.columns([2, 1.2], gap="large")
+            # ── ROW 3: Portfolio Holdings (Full Width) ──
+            st.markdown("<div class='viz-title'>PORTFOLIO HOLDINGS</div>", unsafe_allow_html=True)
+            show_cols = ["rank", "symbol", "company_name", "sector", "weight_pct"]
+            if "shares_to_buy" in port_df.columns: show_cols += ["alloc_inr", "shares_to_buy"]
+            show_cols += ["composite_score", "pe_ttm", "beta"]
             
-            with col_table:
-                st.markdown("<div class='viz-title'>PORTFOLIO HOLDINGS</div>", unsafe_allow_html=True)
-                show_cols = ["rank", "symbol", "weight_pct"]
-                if "shares_to_buy" in port_df.columns: show_cols += ["alloc_inr", "shares_to_buy"]
-                show_cols += ["composite_score", "pe_ttm", "beta"]
-                
-                st.dataframe(
-                    port_df[show_cols].style
-                    .format({"weight_pct": "{:.2f}%", "alloc_inr": "₹{:,.0f}", "composite_score": "{:.1f}", "pe_ttm": "{:.1f}", "beta": "{:.2f}"})
-                    .background_gradient(subset=["weight_pct"], cmap="Blues"),
-                    use_container_width=True, hide_index=True, height=450
-                )
+            st.dataframe(
+                port_df[show_cols].style
+                .format({"weight_pct": "{:.2f}%", "alloc_inr": "₹{:,.0f}", "composite_score": "{:.1f}", "pe_ttm": "{:.1f}", "beta": "{:.2f}"})
+                .background_gradient(subset=["weight_pct"], cmap="Blues"),
+                use_container_width=True, hide_index=True, height=min(60+len(port_df)*36, 600)
+            )
 
+            st.divider()
+
+            # ── ROW 4: Interactive Sector Drill-Down & Sector Allocation Table ──
+            col_chart, col_leg = st.columns([1.5, 1], gap="large")
+            
             with col_chart:
-                st.markdown("<div class='viz-title'>SECTOR CONCENTRATION</div>", unsafe_allow_html=True)
-                labels = list(sec_wts.keys())
-                values = [v * 100 for v in sec_wts.values()]
+                st.markdown("<div class='viz-title'>SECTOR & STOCK DRILL-DOWN</div>", unsafe_allow_html=True)
+                st.caption("Click on any sector slice to see the individual stocks inside it. Click the center to zoom back out.")
                 
-                fig_pie = go.Figure(data=[go.Pie(
-                    labels=labels, values=values, hole=0.45, textposition='inside', textinfo='percent', 
-                    hoverinfo='label+percent', marker=dict(line=dict(color='#ffffff', width=2))
-                )])
-                fig_pie.update_layout(
-                    showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5, font=dict(size=10)),
-                    margin=dict(t=10, b=10, l=10, r=10), height=400, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
-                )
-                st.plotly_chart(fig_pie, use_container_width=True)
+                # Build Sunburst Chart Data
+                labels = ["Portfolio"]
+                parents = [""]
+                values = [0] 
+                ids = ["Portfolio"]
+
+                # Sector Level
+                for sec in port_df['sector'].unique():
+                    ids.append(sec)
+                    labels.append(sec)
+                    parents.append("Portfolio")
+                    values.append(port_df[port_df['sector']==sec]['weight_pct'].sum())
+
+                # Stock Level
+                for _, r in port_df.iterrows():
+                    ids.append(r['symbol'])
+                    labels.append(r['symbol'])
+                    parents.append(r['sector'])
+                    values.append(r['weight_pct'])
+
+                # Update root value
+                values[0] = sum([port_df[port_df['sector']==sec]['weight_pct'].sum() for sec in port_df['sector'].unique()])
+
+                fig_sunburst = go.Figure(go.Sunburst(
+                    ids=ids, labels=labels, parents=parents, values=values,
+                    branchvalues="total",
+                    textinfo="label+percent entry",
+                    hoverinfo="label+percent entry",
+                    marker=dict(line=dict(color='#ffffff', width=1.5))
+                ))
+                fig_sunburst.update_layout(margin=dict(t=10, b=10, l=10, r=10), height=450, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                st.plotly_chart(fig_sunburst, use_container_width=True)
+
+            with col_leg:
+                st.markdown("<div class='viz-title'>SECTOR ALLOCATION</div>", unsafe_allow_html=True)
+                sec_df = pd.DataFrame(list(sec_wts.items()), columns=["Sector", "Weight"])
+                sec_df['Weight'] = (sec_df['Weight'] * 100).round(2)
+                sec_df = sec_df.sort_values('Weight', ascending=False).reset_index(drop=True)
+                st.dataframe(sec_df.style.format({"Weight": "{:.2f}%"}).background_gradient(cmap="Blues"), use_container_width=True, height=450, hide_index=True)
 
             st.divider()
             
-            # ROW 4: Backtest & Radar Chart
-            vcol1, vcol2 = st.columns(2, gap="large")
-            with vcol1:
-                st.markdown("<div class='viz-title'>HISTORICAL 2Y BACKTEST (Base 1.0)</div>", unsafe_allow_html=True)
-                fig_backtest = go.Figure()
-                fig_backtest.add_trace(go.Scatter(
-                    x=chart_data["cum_returns"].index, y=chart_data["cum_returns"].values, 
-                    mode='lines', name='Portfolio', fill='tozeroy', fillcolor='rgba(0, 87, 184, 0.1)',
-                    line=dict(color='#0057b8', width=2)
-                ))
-                fig_backtest.update_layout(margin=dict(l=20,r=20,t=20,b=20), height=350, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(family="Inter", size=11))
-                st.plotly_chart(fig_backtest, use_container_width=True)
-
-            with vcol2:
-                st.markdown("<div class='viz-title'>FACTOR EXPOSURE DNA</div>", unsafe_allow_html=True)
-                f_labels = [f.replace("_", " ").title() for f in chart_data["factor_scores"].keys()]
-                f_vals = list(chart_data["factor_scores"].values())
-                fig_radar = go.Figure(data=go.Scatterpolar(
-                    r=f_vals + [f_vals[0]], theta=f_labels + [f_labels[0]], fill='toself', 
-                    fillcolor='rgba(14, 165, 233, 0.2)', line=dict(color='#0284c7', width=2)
-                ))
-                fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 10])), showlegend=False, margin=dict(l=40,r=40,t=20,b=20), height=350, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(family="Inter", size=11))
-                st.plotly_chart(fig_radar, use_container_width=True)
+            # ── ROW 5: Factor Exposure DNA (Full Width) ──
+            st.markdown("<div class='viz-title' style='text-align:center;'>FACTOR EXPOSURE DNA</div>", unsafe_allow_html=True)
+            f_labels = [f.replace("_", " ").title() for f in chart_data["factor_scores"].keys()]
+            f_vals = list(chart_data["factor_scores"].values())
+            fig_radar = go.Figure(data=go.Scatterpolar(
+                r=f_vals + [f_vals[0]], theta=f_labels + [f_labels[0]], fill='toself', 
+                fillcolor='rgba(14, 165, 233, 0.2)', line=dict(color='#0284c7', width=2)
+            ))
+            fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 10])), showlegend=False, margin=dict(l=40,r=40,t=20,b=20), height=400, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(family="Inter", size=12))
+            st.plotly_chart(fig_radar, use_container_width=True)
             
             st.divider()
 
-            # ROW 5: Scatter & Heatmap
-            vcol3, vcol4 = st.columns(2, gap="large")
-            with vcol3:
-                st.markdown("<div class='viz-title'>RISK VS. REWARD (Bubble = Weight)</div>", unsafe_allow_html=True)
-                df_rr = chart_data["df_rr"]
-                max_wt = df_rr["weight"].max() if not df_rr.empty else 0.05
-                sizeref = 2.0 * max_wt / (40.**2) 
-                fig_scatter = go.Figure(data=go.Scatter(
-                    x=df_rr["volatility"]*100, y=df_rr["return"]*100, mode='markers', text=df_rr["symbol"], 
-                    hovertemplate="<b>%{text}</b><br>Return: %{y:.2f}%<br>Volatility: %{x:.2f}%<extra></extra>",
-                    marker=dict(size=df_rr["weight"], sizemode='area', sizeref=sizeref, sizemin=4, color=df_rr["return"], colorscale='RdYlGn', showscale=True, colorbar=dict(title="Ret %"))
-                ))
-                fig_scatter.update_layout(xaxis_title="Annualized Volatility (%)", yaxis_title="Annualized Return (%)", margin=dict(l=20,r=20,t=20,b=20), height=400, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(family="Inter", size=11))
-                st.plotly_chart(fig_scatter, use_container_width=True)
-                
-            with vcol4:
-                st.markdown("<div class='viz-title'>ASSET CORRELATION HEATMAP</div>", unsafe_allow_html=True)
-                corr = chart_data["corr_matrix"]
-                fig_corr = go.Figure(data=go.Heatmap(z=corr.values, x=corr.columns, y=corr.index, colorscale='Tealrose', zmin=-1, zmax=1))
-                fig_corr.update_layout(margin=dict(l=20,r=20,t=20,b=20), height=400, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(family="Inter", size=11))
-                st.plotly_chart(fig_corr, use_container_width=True)
+            # ── ROW 6: Historical Backtest (Full Width) ──
+            st.markdown("<div class='viz-title'>HISTORICAL 2Y BACKTEST (Base 1.0)</div>", unsafe_allow_html=True)
+            fig_backtest = go.Figure()
+            
+            bench_df = chart_data.get("bench_cumret", pd.DataFrame())
+            if not bench_df.empty:
+                if "Nifty 500" in bench_df.columns:
+                    fig_backtest.add_trace(go.Scatter(x=bench_df.index, y=bench_df["Nifty 500"], mode='lines', name='Nifty 500', line=dict(color='#94a3b8', width=1.5, dash='dash')))
+                if "Nifty 50" in bench_df.columns:
+                    fig_backtest.add_trace(go.Scatter(x=bench_df.index, y=bench_df["Nifty 50"], mode='lines', name='Nifty 50', line=dict(color='#d97706', width=1.5, dash='dot')))
+            
+            fig_backtest.add_trace(go.Scatter(
+                x=chart_data["cum_returns"].index, y=chart_data["cum_returns"].values, 
+                mode='lines', name='Portfolio', fill='tozeroy', fillcolor='rgba(0, 87, 184, 0.1)',
+                line=dict(color='#0057b8', width=2.5)
+            ))
+            
+            fig_backtest.update_layout(
+                margin=dict(l=20,r=20,t=20,b=20), height=400, paper_bgcolor='rgba(0,0,0,0)', 
+                plot_bgcolor='rgba(0,0,0,0)', font=dict(family="Inter", size=11),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            st.plotly_chart(fig_backtest, use_container_width=True)
+
+            st.divider()
+
+            # ── ROW 7: Correlation Heatmap (Full Width, Masked Upper Triangle) ──
+            st.markdown("<div class='viz-title'>ASSET CORRELATION MATRIX</div>", unsafe_allow_html=True)
+            st.caption("Values range from -1 (Perfectly Inverse) to +1 (Perfectly Correlated). Dark red indicates high correlation risk.")
+            
+            corr = chart_data["corr_matrix"]
+            mask = np.triu(np.ones_like(corr, dtype=bool), k=1) # Keep diagonal to draw stair shape perfectly
+            corr_masked = corr.where(~mask, np.nan)
+
+            fig_corr = go.Figure(data=go.Heatmap(
+                z=corr_masked.values, x=corr.columns, y=corr.index, 
+                colorscale='RdBu', zmin=-1, zmax=1, hoverongaps=False, showscale=True
+            ))
+            
+            fig_corr.update_layout(
+                yaxis_autorange='reversed', # Reverses Y axis to make the staircase look natural
+                margin=dict(l=20,r=20,t=20,b=20), height=600, paper_bgcolor='rgba(0,0,0,0)', 
+                plot_bgcolor='rgba(0,0,0,0)', font=dict(family="Inter", size=10)
+            )
+            st.plotly_chart(fig_corr, use_container_width=True)
 
             # Generate Excel Button
-            st.divider()
+            st.markdown("<br><hr style='margin: 20px 0;'>", unsafe_allow_html=True)
             excel_data = create_excel_buffer(df_scored, df_gated, failed, port_df, analytics)
             st.download_button(
                 label="📥 Download Full Excel Report",
