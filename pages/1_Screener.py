@@ -15,7 +15,6 @@ from datetime import datetime, timedelta
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Font, Alignment
 from openpyxl.utils import get_column_letter
-from openpyxl.formatting.rule import ColorScaleRule
 
 # =============================================================================
 # PAGE CONFIG & CSS
@@ -26,13 +25,14 @@ st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap');
     .stApp { background-color: #f4f6f9; color: #1a202c; font-family: 'Inter', sans-serif; }
-    .dash-title { font-family: 'JetBrains Mono', monospace; font-size: 1.4rem; font-weight: 700; color: #0057b8; letter-spacing: 0.08em; }
-    .dash-subtitle { font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; color: #94a3b8; letter-spacing: 0.12em; text-transform: uppercase; }
-    .section-header { font-family: 'JetBrains Mono', monospace; font-size: 0.58rem; letter-spacing: 0.14em; color: #94a3b8; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; margin: 14px 0 8px 0; }
-    div[data-testid="stMetric"] { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-    [data-testid="stMetricLabel"] { font-size: 0.65rem !important; color: #64748b !important; text-transform: uppercase; letter-spacing: 0.08em; }
-    [data-testid="stMetricValue"] { font-family: 'JetBrains Mono', monospace !important; font-size: 1.05rem !important; color: #1e293b !important; }
-    .stDataFrame { border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff; }
+    .dash-title { font-family: 'JetBrains Mono', monospace; font-size: 1.5rem; font-weight: 700; color: #0057b8; letter-spacing: 0.08em; margin-bottom: 0px;}
+    .dash-subtitle { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: #64748b; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 20px;}
+    .section-header { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; letter-spacing: 0.14em; color: #94a3b8; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin: 20px 0 10px 0; }
+    div[data-testid="stMetric"] { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.03); }
+    [data-testid="stMetricLabel"] { font-size: 0.68rem !important; color: #64748b !important; text-transform: uppercase; letter-spacing: 0.08em; }
+    [data-testid="stMetricValue"] { font-family: 'JetBrains Mono', monospace !important; font-size: 1.15rem !important; color: #0f172a !important; }
+    .stDataFrame { border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+    .viz-title { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; font-weight: 600; color: #475569; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -47,8 +47,6 @@ CONFIG = {
     "cache_dir": "output/cache/", "cache_ttl_hours": 24,
 }
 
-METHOD_NAMES = {1: "Score-Weighted", 2: "Inverse Volatility", 3: "Score / Volatility", 4: "Maximum Sharpe Ratio", 5: "Hierarchical Risk Parity"}
-
 def safe_float(v):
     if v is None: return np.nan
     try:
@@ -57,36 +55,43 @@ def safe_float(v):
     except: return np.nan
 
 # =============================================================================
-# CACHE & UNIVERSE LOGIC
+# CACHE & UNIVERSE LOGIC (Upgraded NSE Bypass)
 # =============================================================================
 @st.cache_data(ttl=3600)
 def fetch_index_universe(name):
     urls = {
         "nifty500": [
             "https://archives.nseindia.com/content/indices/ind_nifty500list.csv",
-            "https://www.niftyindices.com/IndexConstituent/ind_nifty500list.csv", 
             "https://raw.githubusercontent.com/kprohith/nse-stock-analysis/master/ind_nifty500list.csv"
         ],
         "microcap250": [
             "https://archives.nseindia.com/content/indices/ind_niftymicrocap250list.csv",
-            "https://www.niftyindices.com/IndexConstituent/ind_niftymicrocap250list.csv",
-            "https://raw.githubusercontent.com/datasets/nse-indices/main/ind_niftymicrocap250list.csv"
+            "https://raw.githubusercontent.com/Anmol31/Nifty-Indices/main/ind_niftymicrocap250list.csv"
         ]
     }
+    
     session = requests.Session()
-    session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
+    # Mimic a real browser to bypass NSE firewall
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9"
+    })
+    
+    # Hit the NSE homepage first to generate valid cookies
+    try: session.get("https://www.nseindia.com", timeout=5)
+    except: pass
+
     for url in urls.get(name, []):
         try:
             r = session.get(url, timeout=10)
-            if r.status_code == 200:
-                try:
-                    df = pd.read_csv(StringIO(r.text))
-                except:
-                    df = pd.read_csv(StringIO(r.text), on_bad_lines='skip')
+            if r.status_code == 200 and "Symbol" in r.text:
+                df = pd.read_csv(StringIO(r.text), on_bad_lines='skip')
                 df.columns = df.columns.str.strip()
                 if "Symbol" in df.columns:
                     return df[df["Symbol"].notna() & (df["Symbol"].str.strip() != "")]
         except: continue
+        
     return pd.DataFrame(columns=["Symbol","Industry"])
 
 def load_cache(symbol):
@@ -195,13 +200,6 @@ def fetch_stock_data(symbol, nse_sector="Unknown"):
                 elif len(rev) >= 2:
                     r0 = safe_float(rev.iloc[0]); rn = safe_float(rev.iloc[-1]); n = len(rev)-1
                     if not np.isnan(r0) and not np.isnan(rn) and rn > 0: result["revenue_cagr_3yr"] = ((r0/rn)**(1/n)-1)*100
-            for ek in ["Operating Income","EBIT"]:
-                if inc is not None and ek in inc.index:
-                    op = inc.loc[ek].dropna().sort_index(ascending=False)
-                    if len(op) >= 4:
-                        o0 = safe_float(op.iloc[0]); o3 = safe_float(op.iloc[3])
-                        if not np.isnan(o0) and not np.isnan(o3) and o3 > 0 and o0 > 0: result["op_income_cagr_3yr"] = ((o0/o3)**(1/3)-1)*100
-                    break
             ebit = _get_item(inc, ["Operating Income","EBIT"])
             if bs is not None:
                 equity = _get_item(bs, ["Stockholders Equity","Total Stockholder Equity","Common Stock Equity"])
@@ -227,8 +225,6 @@ def fetch_stock_data(symbol, nse_sector="Unknown"):
                     if not np.isnan(capex):
                         fcf = ocf + capex
                         if not np.isnan(mktcap) and mktcap > 0: result["fcf_yield"] = fcf / mktcap * 100
-                        if not np.isnan(ni) and ni > 0: result["fcf_conversion"] = fcf / ni * 100
-                        if not np.isnan(ni) and not np.isnan(assets) and assets > 0: result["accruals_ratio"] = (ni - fcf) / assets * 100
                 for ok in ["Operating Cash Flow","Total Cash From Operating Activities"]:
                     if ok in cf.index:
                         ocf_vals = cf.loc[ok].dropna().sort_index(ascending=False)
@@ -422,19 +418,16 @@ def build_portfolio(df_scored, n, method, pval):
             ef = EfficientFrontier(mu, S, weight_bounds=(CONFIG["min_position"], CONFIG["max_position"]))
             ef.max_sharpe(risk_free_rate=CONFIG["risk_free_rate"])
             raw_w = pd.Series(ef.clean_weights())
-        except Exception as e:
-            st.warning(f"Max Sharpe failed ({e}). Falling back to Score/Volatility.")
+        except:
             sc = top_n_avail.set_index("yf_symbol")["composite_score"].apply(safe_float).fillna(0)
-            sv = sc / (vol * 100 + 1e-9)
-            raw_w = sv / sv.sum()
+            raw_w = (sc / (vol * 100 + 1e-9)) / (sc / (vol * 100 + 1e-9)).sum()
     elif method == 5:
         try:
             from pypfopt.hierarchical_portfolio import HRPOpt
             hrp = HRPOpt(returns[sym_list])
             hrp.optimize()
             raw_w = pd.Series(hrp.clean_weights())
-        except Exception as e:
-            st.warning(f"HRP failed ({e}). Falling back to Inverse Volatility.")
+        except:
             iv = 1.0 / vol.replace(0, np.nan).dropna()
             raw_w = iv / iv.sum()
 
@@ -601,13 +594,19 @@ if st.session_state.get("screener_run"):
     
     status_box.info("📥 Fetching index constituents...")
     df_uni = fetch_index_universe("nifty500")
+    
     if universe == "Nifty 750 (500 + Microcap)":
         df_micro = fetch_index_universe("microcap250")
-        df_uni = pd.concat([df_uni, df_micro]).drop_duplicates(subset=["Symbol"])
+        if df_micro.empty:
+            st.warning("⚠️ Failed to fetch Microcap 250 list from NSE (Server blocked request). Falling back to Nifty 500.")
+        else:
+            df_uni = pd.concat([df_uni, df_micro]).drop_duplicates(subset=["Symbol"])
     
     symbols = df_uni["Symbol"].str.strip().tolist()
     sector_map = dict(zip(df_uni["Symbol"].str.strip(), df_uni[df_uni.columns[1]].str.strip()))
     if universe == "Quick Test (Top 30)": symbols = symbols[:30]
+    
+    st.toast(f"Total Universe Size: {len(symbols)} stocks loaded for analysis.")
     
     records, failed = [], []
     for i, sym in enumerate(symbols):
@@ -666,36 +665,22 @@ if st.session_state.get("screener_run"):
             c3.metric("Est. Sharpe Ratio", analytics["Sharpe Ratio"])
             c4.metric("Max Drawdown", analytics["Max Drawdown"])
             
+            st.markdown("<br>", unsafe_allow_html=True)
+            
             # ROW 2: Fundamental Aggregates
-            st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
             c5, c6, c7, c8 = st.columns(4)
             c5.metric("Weighted Beta", f"{analytics['Weighted Beta']:.2f}" if not np.isnan(analytics['Weighted Beta']) else "N/A")
             c6.metric("Weighted P/E", f"{analytics['Weighted P/E']:.1f}x" if not np.isnan(analytics['Weighted P/E']) else "N/A")
             c7.metric("Weighted P/B", f"{analytics['Weighted P/B']:.1f}x" if not np.isnan(analytics['Weighted P/B']) else "N/A")
             c8.metric("Avg Piotroski F-Score", f"{analytics['Avg Piotroski F-Score']:.1f}" if not np.isnan(analytics['Avg Piotroski F-Score']) else "N/A")
             
-            st.markdown("<hr style='margin: 20px 0;'>", unsafe_allow_html=True)
+            st.divider()
             
             # ROW 3: Sector Chart & Holdings Table
-            col_chart, col_table = st.columns([1.2, 2.5])
+            col_table, col_chart = st.columns([2, 1.2], gap="large")
             
-            with col_chart:
-                st.markdown("<div style='font-family: JetBrains Mono; font-size: 0.8rem; font-weight: 600; color: #64748b; margin-bottom: 10px;'>SECTOR CONCENTRATION</div>", unsafe_allow_html=True)
-                
-                labels = list(sec_wts.keys())
-                values = [v * 100 for v in sec_wts.values()]
-                
-                fig_pie = go.Figure(data=[go.Pie(
-                    labels=labels, values=values, hole=0.45, textposition='inside', textinfo='percent', hoverinfo='label+percent', marker=dict(line=dict(color='#ffffff', width=2))
-                )])
-                fig_pie.update_layout(
-                    showlegend=True, legend=dict(orientation="h", yanchor="top", y=-0.1, xanchor="center", x=0.5, font=dict(size=10)),
-                    margin=dict(t=10, b=10, l=10, r=10), height=350, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
-                )
-                st.plotly_chart(fig_pie, use_container_width=True)
-
             with col_table:
-                st.markdown("<div style='font-family: JetBrains Mono; font-size: 0.8rem; font-weight: 600; color: #64748b; margin-bottom: 10px;'>PORTFOLIO HOLDINGS</div>", unsafe_allow_html=True)
+                st.markdown("<div class='viz-title'>PORTFOLIO HOLDINGS</div>", unsafe_allow_html=True)
                 show_cols = ["rank", "symbol", "weight_pct"]
                 if "shares_to_buy" in port_df.columns: show_cols += ["alloc_inr", "shares_to_buy"]
                 show_cols += ["composite_score", "pe_ttm", "beta"]
@@ -704,48 +689,76 @@ if st.session_state.get("screener_run"):
                     port_df[show_cols].style
                     .format({"weight_pct": "{:.2f}%", "alloc_inr": "₹{:,.0f}", "composite_score": "{:.1f}", "pe_ttm": "{:.1f}", "beta": "{:.2f}"})
                     .background_gradient(subset=["weight_pct"], cmap="Blues"),
-                    use_container_width=True, hide_index=True, height=400
+                    use_container_width=True, hide_index=True, height=450
                 )
-            
-            st.markdown("<hr style='margin: 20px 0;'>", unsafe_allow_html=True)
-            st.markdown("<div style='font-family: JetBrains Mono; font-size: 1rem; font-weight: 700; color: #1e293b; margin-bottom: 15px;'>📈 ADVANCED PORTFOLIO VISUALISATIONS</div>", unsafe_allow_html=True)
+
+            with col_chart:
+                st.markdown("<div class='viz-title'>SECTOR CONCENTRATION</div>", unsafe_allow_html=True)
+                labels = list(sec_wts.keys())
+                values = [v * 100 for v in sec_wts.values()]
+                
+                fig_pie = go.Figure(data=[go.Pie(
+                    labels=labels, values=values, hole=0.45, textposition='inside', textinfo='percent', 
+                    hoverinfo='label+percent', marker=dict(line=dict(color='#ffffff', width=2))
+                )])
+                fig_pie.update_layout(
+                    showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5, font=dict(size=10)),
+                    margin=dict(t=10, b=10, l=10, r=10), height=400, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
+                )
+                st.plotly_chart(fig_pie, use_container_width=True)
+
+            st.divider()
             
             # ROW 4: Backtest & Radar Chart
-            vcol1, vcol2 = st.columns(2)
+            vcol1, vcol2 = st.columns(2, gap="large")
             with vcol1:
+                st.markdown("<div class='viz-title'>HISTORICAL 2Y BACKTEST (Base 1.0)</div>", unsafe_allow_html=True)
                 fig_backtest = go.Figure()
-                fig_backtest.add_trace(go.Scatter(x=chart_data["cum_returns"].index, y=chart_data["cum_returns"].values, mode='lines', name='Portfolio', line=dict(color='#0057b8', width=2)))
-                fig_backtest.update_layout(title="Historical 2Y Backtest (Base 1.0)", margin=dict(l=20,r=20,t=40,b=20), height=350, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(family="Inter", size=11))
+                fig_backtest.add_trace(go.Scatter(
+                    x=chart_data["cum_returns"].index, y=chart_data["cum_returns"].values, 
+                    mode='lines', name='Portfolio', fill='tozeroy', fillcolor='rgba(0, 87, 184, 0.1)',
+                    line=dict(color='#0057b8', width=2)
+                ))
+                fig_backtest.update_layout(margin=dict(l=20,r=20,t=20,b=20), height=350, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(family="Inter", size=11))
                 st.plotly_chart(fig_backtest, use_container_width=True)
 
             with vcol2:
+                st.markdown("<div class='viz-title'>FACTOR EXPOSURE DNA</div>", unsafe_allow_html=True)
                 f_labels = [f.replace("_", " ").title() for f in chart_data["factor_scores"].keys()]
                 f_vals = list(chart_data["factor_scores"].values())
-                fig_radar = go.Figure(data=go.Scatterpolar(r=f_vals + [f_vals[0]], theta=f_labels + [f_labels[0]], fill='toself', marker=dict(color='#16a34a')))
-                fig_radar.update_layout(title="Factor Exposure DNA", polar=dict(radialaxis=dict(visible=True, range=[0, 10])), showlegend=False, margin=dict(l=40,r=40,t=40,b=20), height=350, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(family="Inter", size=11))
+                fig_radar = go.Figure(data=go.Scatterpolar(
+                    r=f_vals + [f_vals[0]], theta=f_labels + [f_labels[0]], fill='toself', 
+                    fillcolor='rgba(14, 165, 233, 0.2)', line=dict(color='#0284c7', width=2)
+                ))
+                fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 10])), showlegend=False, margin=dict(l=40,r=40,t=20,b=20), height=350, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(family="Inter", size=11))
                 st.plotly_chart(fig_radar, use_container_width=True)
-                
+            
+            st.divider()
+
             # ROW 5: Scatter & Heatmap
-            vcol3, vcol4 = st.columns(2)
+            vcol3, vcol4 = st.columns(2, gap="large")
             with vcol3:
+                st.markdown("<div class='viz-title'>RISK VS. REWARD (Bubble = Weight)</div>", unsafe_allow_html=True)
                 df_rr = chart_data["df_rr"]
                 max_wt = df_rr["weight"].max() if not df_rr.empty else 0.05
                 sizeref = 2.0 * max_wt / (40.**2) 
                 fig_scatter = go.Figure(data=go.Scatter(
-                    x=df_rr["volatility"]*100, y=df_rr["return"]*100, mode='markers', text=df_rr["symbol"], hovertemplate="<b>%{text}</b><br>Return: %{y:.2f}%<br>Volatility: %{x:.2f}%<extra></extra>",
+                    x=df_rr["volatility"]*100, y=df_rr["return"]*100, mode='markers', text=df_rr["symbol"], 
+                    hovertemplate="<b>%{text}</b><br>Return: %{y:.2f}%<br>Volatility: %{x:.2f}%<extra></extra>",
                     marker=dict(size=df_rr["weight"], sizemode='area', sizeref=sizeref, sizemin=4, color=df_rr["return"], colorscale='RdYlGn', showscale=True, colorbar=dict(title="Ret %"))
                 ))
-                fig_scatter.update_layout(title="Risk vs. Reward (Bubble Size = Weight)", xaxis_title="Annualized Volatility (%)", yaxis_title="Annualized Return (%)", margin=dict(l=20,r=20,t=40,b=20), height=400, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(family="Inter", size=11))
+                fig_scatter.update_layout(xaxis_title="Annualized Volatility (%)", yaxis_title="Annualized Return (%)", margin=dict(l=20,r=20,t=20,b=20), height=400, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(family="Inter", size=11))
                 st.plotly_chart(fig_scatter, use_container_width=True)
                 
             with vcol4:
+                st.markdown("<div class='viz-title'>ASSET CORRELATION HEATMAP</div>", unsafe_allow_html=True)
                 corr = chart_data["corr_matrix"]
-                fig_corr = go.Figure(data=go.Heatmap(z=corr.values, x=corr.columns, y=corr.index, colorscale='RdBu', zmin=-1, zmax=1))
-                fig_corr.update_layout(title="Asset Correlation Heatmap", margin=dict(l=20,r=20,t=40,b=20), height=400, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(family="Inter", size=11))
+                fig_corr = go.Figure(data=go.Heatmap(z=corr.values, x=corr.columns, y=corr.index, colorscale='Tealrose', zmin=-1, zmax=1))
+                fig_corr.update_layout(margin=dict(l=20,r=20,t=20,b=20), height=400, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(family="Inter", size=11))
                 st.plotly_chart(fig_corr, use_container_width=True)
 
             # Generate Excel Button
-            st.markdown("<br><hr style='margin: 20px 0;'>", unsafe_allow_html=True)
+            st.divider()
             excel_data = create_excel_buffer(df_scored, df_gated, failed, port_df, analytics)
             st.download_button(
                 label="📥 Download Full Excel Report",
