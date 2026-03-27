@@ -60,22 +60,40 @@ def safe_float(v):
 # CACHE & UNIVERSE LOGIC
 # =============================================================================
 @st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600)
 def fetch_index_universe(name):
     urls = {
-        "nifty500": ["https://www.niftyindices.com/IndexConstituent/ind_nifty500list.csv", "https://raw.githubusercontent.com/kprohith/nse-stock-analysis/master/ind_nifty500list.csv"],
-        "microcap250": ["https://www.niftyindices.com/IndexConstituent/ind_niftymicrocap250list.csv", "https://raw.githubusercontent.com/datasets/nse-indices/main/ind_niftymicrocap250list.csv"]
+        "nifty500": [
+            "https://archives.nseindia.com/content/indices/ind_nifty500list.csv",
+            "https://www.niftyindices.com/IndexConstituent/ind_nifty500list.csv", 
+            "https://raw.githubusercontent.com/kprohith/nse-stock-analysis/master/ind_nifty500list.csv"
+        ],
+        "microcap250": [
+            "https://archives.nseindia.com/content/indices/ind_niftymicrocap250list.csv",
+            "https://www.niftyindices.com/IndexConstituent/ind_niftymicrocap250list.csv",
+            "https://raw.githubusercontent.com/datasets/nse-indices/main/ind_niftymicrocap250list.csv"
+        ]
     }
     session = requests.Session()
-    session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"})
+    session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
+    
     for url in urls.get(name, []):
         try:
             r = session.get(url, timeout=10)
             if r.status_code == 200:
-                df = pd.read_csv(StringIO(r.text))
+                # Tell Pandas to forcefully ignore the NSE's broken trailing commas
+                try:
+                    df = pd.read_csv(StringIO(r.text))
+                except:
+                    df = pd.read_csv(StringIO(r.text), on_bad_lines='skip')
+                
                 df.columns = df.columns.str.strip()
                 if "Symbol" in df.columns:
                     return df[df["Symbol"].notna() & (df["Symbol"].str.strip() != "")]
-        except: continue
+        except: 
+            continue
+            
+    return pd.DataFrame(columns=["Symbol","Industry"])
     return pd.DataFrame(columns=["Symbol","Industry"])
 
 def load_cache(symbol):
