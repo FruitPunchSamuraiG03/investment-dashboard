@@ -603,11 +603,20 @@ if st.session_state.get("screener_run"):
     gate_res = df_all.apply(apply_hard_gates, axis=1)
     df_all["passes_gate"] = gate_res.apply(lambda x: x[0])
     df_all["gate_reason"] = gate_res.apply(lambda x: x[1])
-    
+
     df_passed = df_all[df_all["passes_gate"]].copy().reset_index(drop=True)
     df_gated  = df_all[~df_all["passes_gate"]].copy().reset_index(drop=True)
     
     status_box.info(f"🛡️ Passed Gates: {len(df_passed)} | Eliminated: {len(df_gated)}. Computing Sector Medians...")
+    
+    # --- ADD THIS NEW SAFETY CHECK HERE ---
+    if df_passed.empty:
+        status_box.empty()
+        st.error("⚠️ Zero stocks passed the Hard Gates! Try increasing your universe or checking Yahoo Finance data.")
+        st.stop()
+    # --------------------------------------
+    
+    sector_medians = compute_sector_medians(df_passed)
     
     sector_medians = compute_sector_medians(df_passed)
     score_rows = df_passed.apply(lambda row: compute_scores(row.to_dict(), sector_medians), axis=1)
