@@ -717,11 +717,17 @@ def build_portfolio(df_scored, n, method, pval):
         st.error(f"Price Download Error: {e}"); return None, None, None, None
 
     top_n_avail = top_n[top_n["yf_symbol"].isin(prices.columns)].copy()
-    if len(top_n_avail) < 5: return None, None, None, None
+    n_avail = len(top_n_avail)
+    
+    # FIX: Allow portfolios down to 2 stocks so Custom Watchlists don't crash
+    if n_avail < 2: 
+        st.error("Need at least 2 stocks with valid price history to build a portfolio matrix.")
+        return None, None, None, None
+        
     sym_list = top_n_avail["yf_symbol"].tolist()
     vol = returns[sym_list].std() * np.sqrt(252)
 
-    # ── ADV (Average Daily Volume) Calculation ──
+    # ADV Calculation
     adv_cr = pd.Series(index=sym_list, dtype=float)
     if not volumes.empty:
         avg_vol = volumes[sym_list].tail(20).mean()
@@ -730,7 +736,12 @@ def build_portfolio(df_scored, n, method, pval):
         
     top_n_avail["adv_cr"] = top_n_avail["yf_symbol"].map(adv_cr)
 
-    # ── Weights Optimization ──
+    # Dynamic Constraint Scaling (Solves the "Universe too small" math error)
+    dyn_max_pos = 1.0 if n_avail < (1 / CONFIG["max_position"]) else CONFIG["max_position"]
+    dyn_min_pos = 0.01 if n_avail < (1 / CONFIG["max_position"]) else CONFIG["min_position"]
+    dyn_max_sec = 1.0 if n_avail < 15 else CONFIG["max_sector_wt"]
+
+    # Weights Optimization
     if method == 1:
         sc = top_n_avail.set_index("yf_symbol")["composite_score"].apply(safe_float).fillna(0)
         raw_w = sc / sc.sum()
@@ -744,7 +755,7 @@ def build_portfolio(df_scored, n, method, pval):
             from pypfopt import EfficientFrontier, risk_models, expected_returns
             mu = expected_returns.mean_historical_return(prices[sym_list])
             S = risk_models.sample_cov(prices[sym_list])
-            ef = EfficientFrontier(mu, S, weight_bounds=(CONFIG["min_position"], CONFIG["max_position"]))
+            ef = EfficientFrontier(mu, S, weight_bounds=(dyn_min_pos, dyn_max_pos))
             ef.max_sharpe(risk_free_rate=CONFIG["risk_free_rate"])
             raw_w = pd.Series(ef.clean_weights())
         except:
@@ -761,16 +772,17 @@ def build_portfolio(df_scored, n, method, pval):
         sc = top_n_avail.set_index("yf_symbol")["composite_score"].apply(safe_float).fillna(0)
         sv = sc / (vol * 100 + 1e-9); raw_w = sv / sv.sum()
 
-    raw_w = raw_w.clip(lower=CONFIG["min_position"], upper=CONFIG["max_position"])
+    raw_w = raw_w.clip(lower=dyn_min_pos, upper=dyn_max_pos)
     weights = raw_w / raw_w.sum()
 
     sym_to_sector = dict(zip(top_n_avail["yf_symbol"], top_n_avail["sector"]))
     sec_wts = {}
     for sym, w in weights.items():
         sec = sym_to_sector.get(sym, "Unknown"); sec_wts[sec] = sec_wts.get(sec, 0) + w
+    
     for sec, sw in list(sec_wts.items()):
-        if sw > CONFIG["max_sector_wt"]:
-            scale = CONFIG["max_sector_wt"] / sw
+        if sw > dyn_max_sec:
+            scale = dyn_max_sec / sw
             for sym in list(weights.index):
                 if sym_to_sector.get(sym) == sec: weights[sym] *= scale
     weights = weights / weights.sum()
@@ -783,7 +795,7 @@ def build_portfolio(df_scored, n, method, pval):
         w = weights[mask] / weights[mask].sum()
         return round(float((vals[mask] * w).sum()), 2)
 
-    # ── Base Analytics & Drawdown ──
+    # Base Analytics & Drawdown
     port_ret = (returns[list(weights.index)] * weights).sum(axis=1)
     ann_ret = float((1 + port_ret).prod() ** (252/len(port_ret)) - 1)
     ann_vol = float(port_ret.std() * np.sqrt(252))
@@ -795,7 +807,7 @@ def build_portfolio(df_scored, n, method, pval):
     sharpe = (ann_ret - CONFIG["risk_free_rate"]) / ann_vol if ann_vol > 0 else np.nan
     hhi = sum(v**2 for v in sec_wts.values())
 
-    # ── Benchmark Setup ──
+    # Benchmark Setup
     bench_cumret = pd.DataFrame()
     try:
         bench_raw = yf.download(["^NSEI","^CRSLDX"], period=CONFIG["price_history"], auto_adjust=True, progress=False)
@@ -810,7 +822,7 @@ def build_portfolio(df_scored, n, method, pval):
         bench_cumret.rename(columns={"^NSEI":"Nifty 50","^CRSLDX":"Nifty 500"}, inplace=True, errors="ignore")
     except: pass
 
-    # ── Monte Carlo Forward Simulation ──
+    # Monte Carlo Forward Simulation
     np.random.seed(42) 
     n_days = 252
     n_paths = 1000
@@ -827,7 +839,7 @@ def build_portfolio(df_scored, n, method, pval):
         'P05': mc_pct[0], 'P25': mc_pct[1], 'P50': mc_pct[2], 'P75': mc_pct[3], 'P95': mc_pct[4]
     })
 
-    # ── Assemble Final Data ──
+    # Assemble Final Data
     factors = ["capital_efficiency","valuation","growth_quality","cashflow_quality","dupont_health","balance_sheet"]
     factor_scores = {f: (w_avg(f) if not np.isnan(safe_float(w_avg(f))) else 0) for f in factors}
 
@@ -924,8 +936,6 @@ def create_excel_buffer(df_scored, df_gated, failed, port_df, analytics, score_c
 
     ws4 = wb.create_sheet("Failed")
     ws4.cell(row=1,column=1,value="Symbol").font=Font(bold=True); ws4.cell(row=1,column=2,value="Reason").font=Font(bold=True)
-    
-    # ── FIXED ITERATOR HERE ──
     for i, item in enumerate(failed, 2):
         ws4.cell(row=i,column=1,value=item.get("symbol","")); ws4.cell(row=i,column=2,value=item.get("reason","Fetch Failed"))
     ws4.column_dimensions["B"].width=50
@@ -959,7 +969,6 @@ with st.sidebar:
     total_c, fresh_c = cache_stats()
     st.caption(f"{total_c} files · {fresh_c} fresh ({CONFIG['cache_ttl_hours']}h TTL)")
 
-    # ── FIXED ALERT SIDEBAR (No passwords in UI) ──
     st.markdown('<div class="section-header">🔔 Alerts (Optional)</div>', unsafe_allow_html=True)
     alert_enabled = st.checkbox("Enable alerts after run", value=False)
     alert_email_enabled = alert_wa_enabled = False
@@ -1063,7 +1072,6 @@ if st.session_state.get("screener_run"):
     update_history(df_scored, label)
     status.empty()
 
-    # ── FIXED FIRE ALERTS (Silent Fetch for Sender details) ──
     if st.session_state.get("alert_enabled"):
         body_txt, body_html = _build_alert_digest(df_scored, score_changes_df)
         subject = f"Quant Screener v9 — {label.upper()} · {datetime.now().strftime('%d %b %Y %H:%M')}"
@@ -1091,7 +1099,6 @@ if st.session_state.get("screener_run"):
     # ── 1. PORTFOLIO TEAR SHEET (Master Visual Layout) ───────────────────────
     with tab_port:
         if port_df is not None:
-            # ROW 1 & 2: Metric Cards
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Annual Return",  f"{analytics['ann_ret']*100:.2f}%")
             c2.metric("Volatility",     f"{analytics['ann_vol']*100:.2f}%")
@@ -1105,7 +1112,6 @@ if st.session_state.get("screener_run"):
             c8.metric("Avg Piotroski",  fmt(analytics["piotroski"], "", 1))
             st.divider()
 
-            # ROW 3: HOLDINGS FIRST (Full Width with DTL execution matrix)
             st.markdown("<div class='viz-title'>PORTFOLIO HOLDINGS & LIQUIDITY MATRIX</div>", unsafe_allow_html=True)
             show_cols = ["rank","symbol","company_name","sector","weight_pct"]
             if "alloc_inr" in port_df.columns: show_cols += ["alloc_inr","shares_to_buy", "adv_cr", "dtl"]
@@ -1127,7 +1133,6 @@ if st.session_state.get("screener_run"):
             st.download_button("📥 Download Full Excel Report", data=excel_data, file_name=f"QuantScreener_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
             st.divider()
 
-            # ROW 4: DONUT DRILL-DOWN & LEGEND TABLE
             col_sun, col_alloc = st.columns([1.5, 1], gap="large")
             with col_sun:
                 st.markdown("<div class='viz-title'>SECTOR DRILL-DOWN</div>", unsafe_allow_html=True)
@@ -1156,7 +1161,6 @@ if st.session_state.get("screener_run"):
                 st.dataframe(sec_df.style.format({"Weight":"{:.2f}%"}).background_gradient(cmap="Blues"), use_container_width=True, height=440, hide_index=True)
             st.divider()
 
-            # ROW 5: FACTOR EXPOSURE DNA & RISK/REWARD SCATTER
             col_radar, col_scat = st.columns(2, gap="large")
             with col_radar:
                 st.markdown("<div class='viz-title'>FACTOR EXPOSURE DNA</div>", unsafe_allow_html=True)
@@ -1183,7 +1187,6 @@ if st.session_state.get("screener_run"):
                 st.plotly_chart(fig_scatter, use_container_width=True)
             st.divider()
 
-            # ROW 6: BACKTEST
             st.markdown("<div class='viz-title'>HISTORICAL 2Y BACKTEST (Base 1.0)</div>", unsafe_allow_html=True)
             fig_bt = go.Figure()
             bench_df = chart_data.get("bench_cumret", pd.DataFrame())
@@ -1200,7 +1203,6 @@ if st.session_state.get("screener_run"):
             st.plotly_chart(fig_bt, use_container_width=True)
             st.divider()
 
-            # ROW 7: UNDERWATER DRAWDOWN & MONTE CARLO
             col_dd, col_mc = st.columns(2, gap="large")
             with col_dd:
                 st.markdown("<div class='viz-title'>UNDERWATER DRAWDOWN CURVE</div>", unsafe_allow_html=True)
@@ -1226,7 +1228,6 @@ if st.session_state.get("screener_run"):
                 st.plotly_chart(fig_mc, use_container_width=True)
             st.divider()
 
-            # ROW 8: CORRELATION HEATMAP (Fixed Masked Triangle)
             st.markdown("<div class='viz-title'>ASSET CORRELATION HEATMAP</div>", unsafe_allow_html=True)
             st.caption("Values range from −1 (Inverse) to +1 (Correlated). Heatmap upper-triangle is masked for readability.")
             corr = chart_data["corr_matrix"]
