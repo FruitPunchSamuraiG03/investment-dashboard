@@ -1,14 +1,6 @@
 # """
 # QUANT SCREENER v9  —  Streamlit Edition
 # =========================================
-# Full lineage: Perplexity v4 → CLI v5 → Streamlit v5 → Gemini v7 → v8 → v9 (this file)
-# 
-# What's NEW in v9:
-#  • Monte Carlo Stochastic Simulation: 1,000 forward-looking 1-year paths using GBM.
-#  • Underwater Drawdown Chart: Visualizes depth and duration of historical drawdowns.
-#  • Liquidity Matrix (DTL): Calculates Days to Liquidate based on 20-day ADV & 10% max participation.
-#  • UI Layout Overhaul: Holdings (Full) → Sector Donut (Half) → Factor DNA (Half) → 
-#    Backtest (Full) → Drawdown/Monte Carlo (Half) → Correlation (Full).
 # """
 
 import streamlit as st
@@ -704,7 +696,6 @@ def build_portfolio(df_scored, n, method, pval):
     yf_symbols = top_n["yf_symbol"].tolist()
 
     try:
-        # Fetch both Close prices and Trading Volume for Liquidity checks
         raw = yf.download(yf_symbols, period=CONFIG["price_history"], auto_adjust=True, progress=False)
         
         if isinstance(raw.columns, pd.MultiIndex):
@@ -730,7 +721,7 @@ def build_portfolio(df_scored, n, method, pval):
     sym_list = top_n_avail["yf_symbol"].tolist()
     vol = returns[sym_list].std() * np.sqrt(252)
 
-    # ── 1. Calculate Average Daily Volume (ADV) in Crores ──
+    # ── ADV (Average Daily Volume) Calculation ──
     adv_cr = pd.Series(index=sym_list, dtype=float)
     if not volumes.empty:
         avg_vol = volumes[sym_list].tail(20).mean()
@@ -739,7 +730,7 @@ def build_portfolio(df_scored, n, method, pval):
         
     top_n_avail["adv_cr"] = top_n_avail["yf_symbol"].map(adv_cr)
 
-    # ── 2. Weights Optimization ──
+    # ── Weights Optimization ──
     if method == 1:
         sc = top_n_avail.set_index("yf_symbol")["composite_score"].apply(safe_float).fillna(0)
         raw_w = sc / sc.sum()
@@ -792,7 +783,7 @@ def build_portfolio(df_scored, n, method, pval):
         w = weights[mask] / weights[mask].sum()
         return round(float((vals[mask] * w).sum()), 2)
 
-    # ── 3. Base Analytics & Drawdown ──
+    # ── Base Analytics & Drawdown ──
     port_ret = (returns[list(weights.index)] * weights).sum(axis=1)
     ann_ret = float((1 + port_ret).prod() ** (252/len(port_ret)) - 1)
     ann_vol = float(port_ret.std() * np.sqrt(252))
@@ -804,7 +795,7 @@ def build_portfolio(df_scored, n, method, pval):
     sharpe = (ann_ret - CONFIG["risk_free_rate"]) / ann_vol if ann_vol > 0 else np.nan
     hhi = sum(v**2 for v in sec_wts.values())
 
-    # ── 4. Benchmark Setup ──
+    # ── Benchmark Setup ──
     bench_cumret = pd.DataFrame()
     try:
         bench_raw = yf.download(["^NSEI","^CRSLDX"], period=CONFIG["price_history"], auto_adjust=True, progress=False)
@@ -819,8 +810,8 @@ def build_portfolio(df_scored, n, method, pval):
         bench_cumret.rename(columns={"^NSEI":"Nifty 50","^CRSLDX":"Nifty 500"}, inplace=True, errors="ignore")
     except: pass
 
-    # ── 5. Monte Carlo Forward Simulation (1000 Paths, 1 Year) ──
-    np.random.seed(42) # Reproducible randomness for UI stability
+    # ── Monte Carlo Forward Simulation ──
+    np.random.seed(42) 
     n_days = 252
     n_paths = 1000
     mu_d = port_ret.mean()
@@ -836,7 +827,7 @@ def build_portfolio(df_scored, n, method, pval):
         'P05': mc_pct[0], 'P25': mc_pct[1], 'P50': mc_pct[2], 'P75': mc_pct[3], 'P95': mc_pct[4]
     })
 
-    # ── 6. Assemble Final Data ──
+    # ── Assemble Final Data ──
     factors = ["capital_efficiency","valuation","growth_quality","cashflow_quality","dupont_health","balance_sheet"]
     factor_scores = {f: (w_avg(f) if not np.isnan(safe_float(w_avg(f))) else 0) for f in factors}
 
@@ -868,7 +859,7 @@ def build_portfolio(df_scored, n, method, pval):
     port_df = port_df.sort_values("weight_pct", ascending=False).reset_index(drop=True)
     port_df["rank"] = port_df.index + 1
 
-    # Add DTL calculations if pval exists
+    # Add DTL calculations
     if pval:
         port_df["alloc_inr"] = port_df["weight_pct"] / 100 * pval
         def calc_shares(r):
@@ -878,7 +869,7 @@ def build_portfolio(df_scored, n, method, pval):
         def calc_dtl(r):
             ai=safe_float(r.get("alloc_inr")); adv=safe_float(r.get("adv_cr"))
             if np.isnan(ai) or np.isnan(adv) or adv <= 0: return np.nan
-            return ai / (adv * 1e7 * 0.10) # 10% max daily participation
+            return ai / (adv * 1e7 * 0.10) 
             
         port_df["shares_to_buy"] = port_df.apply(calc_shares, axis=1)
         port_df["dtl"] = port_df.apply(calc_dtl, axis=1)
@@ -933,7 +924,9 @@ def create_excel_buffer(df_scored, df_gated, failed, port_df, analytics, score_c
 
     ws4 = wb.create_sheet("Failed")
     ws4.cell(row=1,column=1,value="Symbol").font=Font(bold=True); ws4.cell(row=1,column=2,value="Reason").font=Font(bold=True)
-    for i, item in enumerate(failed_list, 2):
+    
+    # ── FIXED ITERATOR HERE ──
+    for i, item in enumerate(failed, 2):
         ws4.cell(row=i,column=1,value=item.get("symbol","")); ws4.cell(row=i,column=2,value=item.get("reason","Fetch Failed"))
     ws4.column_dimensions["B"].width=50
 
@@ -966,6 +959,24 @@ with st.sidebar:
     total_c, fresh_c = cache_stats()
     st.caption(f"{total_c} files · {fresh_c} fresh ({CONFIG['cache_ttl_hours']}h TTL)")
 
+    # ── FIXED ALERT SIDEBAR (No passwords in UI) ──
+    st.markdown('<div class="section-header">🔔 Alerts (Optional)</div>', unsafe_allow_html=True)
+    alert_enabled = st.checkbox("Enable alerts after run", value=False)
+    alert_email_enabled = alert_wa_enabled = False
+    alert_recipient = alert_wa_phone = alert_wa_apikey = ""
+    
+    if alert_enabled:
+        alert_email_enabled = st.checkbox("📧 Email Digest")
+        if alert_email_enabled:
+            alert_recipient = st.text_input("Your Email Address", placeholder="you@example.com")
+            
+        alert_wa_enabled = st.checkbox("💬 WhatsApp Digest")
+        if alert_wa_enabled:
+            alert_wa_phone  = st.text_input("Your Phone (intl, no +)", placeholder="919876543210")
+            alert_wa_apikey = st.text_input("Your Callmebot API Key", type="password")
+            
+        st.caption("Alerts fire once per run after scoring completes.")
+
     run_btn = st.button("🚀 Run Full Screener", use_container_width=True, type="primary")
     if st.button("🗑️ Clear Cache", use_container_width=True):
         n = clear_cache(); st.toast(f"Cleared {n} cached files."); st.cache_data.clear()
@@ -976,6 +987,12 @@ if run_btn:
         "universe_opt": universe_opt,
         "custom_syms": custom_syms,
         "screener_label": ("custom" if universe_opt == "Custom Watchlist" else "nifty750" if "750" in universe_opt else "test30" if "Test" in universe_opt else "nifty500"),
+        "alert_enabled": alert_enabled,
+        "alert_email_enabled": alert_email_enabled,
+        "alert_recipient": alert_recipient,
+        "alert_wa_enabled": alert_wa_enabled,
+        "alert_wa_phone": alert_wa_phone,
+        "alert_wa_apikey": alert_wa_apikey,
     })
 
 # =============================================================================
@@ -1045,6 +1062,24 @@ if st.session_state.get("screener_run"):
     score_changes_df = compute_score_changes(df_scored, df_history)
     update_history(df_scored, label)
     status.empty()
+
+    # ── FIXED FIRE ALERTS (Silent Fetch for Sender details) ──
+    if st.session_state.get("alert_enabled"):
+        body_txt, body_html = _build_alert_digest(df_scored, score_changes_df)
+        subject = f"Quant Screener v9 — {label.upper()} · {datetime.now().strftime('%d %b %Y %H:%M')}"
+        
+        if st.session_state.get("alert_email_enabled"):
+            try:
+                sender_email = st.secrets["EMAIL_SENDER"]
+                sender_pw = st.secrets["EMAIL_PW"]
+                ok, msg = send_email_alert(sender_email, sender_pw, st.session_state["alert_recipient"], subject, body_html, body_txt)
+                (st.success if ok else st.error)(f"📧 Email: {msg}")
+            except Exception as e:
+                st.error("⚠️ Email Secrets not configured properly in Streamlit Cloud. Skipping email alert.")
+                
+        if st.session_state.get("alert_wa_enabled"):
+            ok, msg = send_whatsapp_alert(st.session_state["alert_wa_phone"], st.session_state["alert_wa_apikey"], body_txt)
+            (st.success if ok else st.error)(f"💬 WhatsApp: {msg}")
 
     # =========================================================================
     # TABS & UI LAYOUT
